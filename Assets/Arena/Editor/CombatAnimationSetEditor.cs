@@ -2771,7 +2771,7 @@ namespace Arena.Editor
         /// versions. Preserve the JSON contract's optional projectile field explicitly
         /// so a one-strike timing sync cannot add projectile delivery to unrelated attacks.
         /// </summary>
-        private static MeleeManifestDocument DeserializeMeleeManifestDocument(string json)
+        internal static MeleeManifestDocument DeserializeMeleeManifestDocument(string json)
         {
             MeleeManifestDocument document = JsonUtility.FromJson<MeleeManifestDocument>(json)
                 ?? new MeleeManifestDocument();

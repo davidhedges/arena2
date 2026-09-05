@@ -24,6 +24,8 @@ namespace Arena.Editor
             public int testsFailed;
             public List<string> failures = new();
             public List<string> inventoryErrors = new();
+            public int selectableMeleeAbilitiesChecked;
+            public List<string> selectableMeleeErrors = new();
             public List<MeleeRow> melee = new();
             public List<VfxRow> vfx = new();
         }
@@ -113,6 +115,7 @@ namespace Arena.Editor
                         "Arena.Tests.Editor.CombatVfxCueResolverTests.IceSpikes_LegacyCueIsOnlyRedundantWhenAbilityIdentityIsPresent",
                         "Arena.Tests.Editor.SpellVfxGeneratorTests.GeneratedCastHand_FollowsAnimationOriginMirroringAndLegacyInference",
                         "Arena.Tests.Editor.SpellCueCatalogWriterTests",
+                        "Arena.Tests.Editor.MeleeAuthoringDriftTests",
                     },
                 }) { runSynchronously = true });
             }
@@ -123,13 +126,98 @@ namespace Arena.Editor
             }
 
             CaptureMelee(report);
+            try { report.selectableMeleeErrors = CheckSelectableMeleeTiming(out report.selectableMeleeAbilitiesChecked); }
+            catch (Exception error) { report.selectableMeleeErrors.Add(error.ToString()); }
             var window = ScriptableObject.CreateInstance<SpellAuthoringWindow>();
             try { window.CaptureVfxInventory(report); }
             catch (Exception error) { report.inventoryErrors.Add("VFX inventory: " + error); }
             finally { UnityEngine.Object.DestroyImmediate(window); }
             File.WriteAllText(Path.Combine(output, "inventory.json"), JsonUtility.ToJson(report, true));
-            Debug.Log($"[CombatAuthoringVerification] Tests {report.testsPassed} passed / {report.testsFailed} failed; "
-                + $"{report.melee.Count} melee attacks, {report.vfx.Count} VFX comparisons. Report: {output}");
+            string summary = $"[CombatAuthoringVerification] Tests {report.testsPassed} passed / {report.testsFailed} failed; "
+                + $"{report.selectableMeleeAbilitiesChecked} selectable melee abilities checked, "
+                + $"{report.selectableMeleeErrors.Count} timing errors; {report.melee.Count} melee attacks, "
+                + $"{report.vfx.Count} VFX comparisons. Report: {output}";
+            if (!report.testsCompleted || report.testsFailed > 0 || report.inventoryErrors.Count > 0
+                || report.selectableMeleeErrors.Count > 0)
+                Debug.LogError(summary);
+            else
+                Debug.Log(summary);
+        }
+
+        internal static List<string> CheckSelectableMeleeTiming(out int checkedAbilities)
+        {
+            checkedAbilities = 0;
+            var errors = new List<string>();
+            var actions = SpellPresentationEditorData.ReadSelectableMeleeActions(
+                File.ReadAllText(SpellPresentationEditorData.AbsoluteProgressionCatalogPath),
+                File.ReadAllText(SpellPresentationEditorData.AbsoluteCombatBuildV2CatalogPath));
+            if (actions.Count == 0)
+                throw new InvalidDataException("The selectable melee check resolved no abilities.");
+            var sets = SpellPresentationEditorData.LoadCombatAnimationSets()
+                .ToDictionary(set => set.CombatProfileIdOrDefault, StringComparer.Ordinal);
+            var manifest = CombatAnimationSetEditor.DeserializeMeleeManifestDocument(
+                File.ReadAllText("server/src/melee_manifest.shared.json"));
+            var committed = manifest.profiles.ToDictionary(profile => profile.combat_profile, StringComparer.Ordinal);
+            var exported = sets.ToDictionary(pair => pair.Key, pair => pair.Value.BuildMeleeExport().profiles.Single(), StringComparer.Ordinal);
+            foreach (var action in actions)
+            {
+                string label = $"{action.Profile}/{action.AbilityId} ({action.ActionId})";
+                if (!exported.TryGetValue(action.Profile, out var profile))
+                {
+                    errors.Add(label + ": missing CombatAnimationSet.");
+                    continue;
+                }
+                var expected = profile.strikes.SingleOrDefault(strike => strike.id == action.ActionId);
+                if (expected == null)
+                {
+                    errors.Add(label + ": missing authored action ID in the Unity export.");
+                    continue;
+                }
+                var actual = committed.TryGetValue(action.Profile, out var serverProfile)
+                    ? serverProfile.strikes.SingleOrDefault(strike => strike.id == action.ActionId) : null;
+                errors.AddRange(CompareMeleeTiming(expected, actual).Select(error => label + ": " + error));
+                checkedAbilities++;
+            }
+            return errors;
+        }
+
+        internal static List<string> CompareMeleeTiming(MeleeManifestStrike expected, MeleeManifestStrike? actual)
+        {
+            var errors = new List<string>();
+            if (actual == null)
+            {
+                errors.Add("missing committed manifest strike.");
+                return errors;
+            }
+            void Compare(string field, int exported, int committed)
+            {
+                if (exported != committed)
+                    errors.Add($"{field}: export={exported}, manifest={committed}.");
+            }
+            Compare("startup_trim_ms", expected.startup_trim_ms, actual.startup_trim_ms);
+            Compare("recovery_ms", expected.recovery_ms, actual.recovery_ms);
+            Compare("combo_open_ms", expected.combo_open_ms, actual.combo_open_ms);
+            Compare("combo_grace_ms", expected.combo_grace_ms, actual.combo_grace_ms);
+            Compare("hit_windows.length", expected.hit_windows.Length, actual.hit_windows.Length);
+            for (int index = 0; index < Math.Min(expected.hit_windows.Length, actual.hit_windows.Length); index++)
+            {
+                var left = expected.hit_windows[index];
+                var right = actual.hit_windows[index];
+                Compare($"hit_windows[{index}].impact_delay_ms", left.impact_delay_ms, right.impact_delay_ms);
+                if (!string.Equals(left.impact_phase ?? "", right.impact_phase ?? "", StringComparison.OrdinalIgnoreCase))
+                    errors.Add($"hit_windows[{index}].impact_phase: export='{left.impact_phase}', manifest='{right.impact_phase}'.");
+                Compare($"hit_windows[{index}].phase_delay_ms", left.phase_delay_ms, right.phase_delay_ms);
+            }
+            var leftTiming = expected.phased_gap_close_timing;
+            var rightTiming = actual.phased_gap_close_timing;
+            if ((leftTiming == null) != (rightTiming == null))
+                errors.Add("phased_gap_close_timing presence differs.");
+            else if (leftTiming != null && rightTiming != null)
+            {
+                Compare("phased_gap_close_timing.start_duration_ms", leftTiming.start_duration_ms, rightTiming.start_duration_ms);
+                Compare("phased_gap_close_timing.loop_duration_ms", leftTiming.loop_duration_ms, rightTiming.loop_duration_ms);
+            }
+            return errors;
         }
 
         private static void CaptureMelee(Report report)

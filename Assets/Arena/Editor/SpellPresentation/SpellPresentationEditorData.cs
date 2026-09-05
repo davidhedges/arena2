@@ -46,6 +46,20 @@ namespace Arena.Editor
         public IReadOnlyList<CombatDisciplineAuthoringFacts> Disciplines { get; }
     }
 
+    internal readonly struct SelectableMeleeAction
+    {
+        public SelectableMeleeAction(string abilityId, string profile, string actionId)
+        {
+            AbilityId = abilityId;
+            Profile = profile;
+            ActionId = actionId;
+        }
+
+        public string AbilityId { get; }
+        public string Profile { get; }
+        public string ActionId { get; }
+    }
+
     /// <summary>
     /// Shared read boundary for spell-presentation editor tools. Runtime identifiers come from the
     /// catalog's authored <c>action_id</c>; callers never infer them from class/ability prefixes.
@@ -76,6 +90,40 @@ namespace Arena.Editor
             Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets")
                 .OrderBy(set => set.name, StringComparer.Ordinal)
                 .ToArray();
+
+        internal static List<SelectableMeleeAction> ReadSelectableMeleeActions(
+            string progressionJson, string buildJson)
+        {
+            var progression = JsonUtility.FromJson<CatalogDocument>(progressionJson);
+            var build = JsonUtility.FromJson<CombatBuildV2CatalogDocument>(buildJson);
+            if (progression?.abilities == null || build?.specializations == null)
+                throw new InvalidDataException("Selectable melee verification requires both authored catalogs.");
+
+            var abilities = progression.abilities.ToDictionary(
+                row => WireIdentifier.Normalize(row.ability_id), StringComparer.Ordinal);
+            var result = new List<SelectableMeleeAction>();
+            foreach (var specialization in build.specializations)
+            {
+                string profile = WireIdentifier.Normalize(specialization.combat_discipline_id);
+                foreach (string reference in specialization.technique_ability_ids ?? Array.Empty<string>())
+                {
+                    string id = WireIdentifier.Normalize(reference);
+                    if (!abilities.TryGetValue(id, out var ability))
+                        throw new InvalidDataException($"Selectable Technique '{id}' is absent from progression.");
+                    if (string.IsNullOrWhiteSpace(ability.gameplay?.kind))
+                        throw new InvalidDataException($"Selectable Technique '{id}' has no gameplay executor.");
+                    // Technique classification does not imply a melee executor.
+                    if (WireIdentifier.Normalize(ability.gameplay!.kind) != "MELEE")
+                        continue;
+                    string action = WireIdentifier.Normalize(ability.action_id);
+                    if (profile.Length == 0 || action.Length == 0)
+                        throw new InvalidDataException($"Selectable melee ability '{id}' requires a profile and action ID.");
+                    result.Add(new SelectableMeleeAction(id, profile, action));
+                }
+            }
+
+            return result;
+        }
 
         public static List<string> LoadSpellSchoolIds(out string warning)
         {
@@ -329,6 +377,7 @@ namespace Arena.Editor
             public string specialization_kind = string.Empty;
             public string combat_discipline_id = string.Empty;
             public int sort_order;
+            public string[]? technique_ability_ids;
         }
 
         [Serializable]
@@ -342,6 +391,7 @@ namespace Arena.Editor
         [Serializable]
         private sealed class GameplayRow
         {
+            public string kind = string.Empty;
             public long cast_time_ms;
             public DeliveryRow? delivery;
         }

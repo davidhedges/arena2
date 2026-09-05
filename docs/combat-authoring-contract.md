@@ -168,6 +168,17 @@ Inventory` runs the targeted authoring regressions and writes a read-only
 melee/VFX comparison under `Logs/CombatAuthoringVerification`. It does not
 regenerate authored content or replace visual verification.
 
+The verification also requires selectable melee timing to match the server
+manifest. It derives Technique membership and weapon ownership from the v2
+Specialization catalog, then reads each ability's explicit `action_id` and
+gameplay executor from progression. It does not infer ownership from an ID
+prefix or treat every Technique as melee. It checks all hit windows, recovery,
+startup trim, combo windows, and phased gap-close durations. Missing authored or
+committed actions fail the check. Eventless attacks use their existing exported
+fallback; unselected legacy rows remain visible in the broader inventory.
+This check covers direct selectable melee roots, not separately synthesized
+autoattack aliases or a complete traversal of combo successors.
+
 ## Canonical concepts
 
 The five runtime Disciplines are:

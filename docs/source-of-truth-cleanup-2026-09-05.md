@@ -356,6 +356,20 @@ tables were snapshotted before editing.
   action IDs authors timed movement in progression. All 84 server melee tests
   pass after this metadata update. The five eventless entries retain their
   existing fallback values, and no Staff strike was added.
+- **Item 3 complete:** the normal-Editor verification derives its selectable
+  melee roots from the existing v2 Specialization and progression read boundary.
+  All **58 selectable melee abilities** agree with their current Unity exports
+  on hit delays/counts, per-hit phase metadata, recovery, startup trim, combo
+  windows, and phased gap-close durations. Missing actions fail the check.
+  Fifteen new native cases cover current content, catalog selection, incomplete
+  references, multi-hit drift, optional phase timing, and case semantics. All
+  **55 targeted native EditMode cases pass**. A fresh native reload also confirms
+  zero stale mirrors and identical complete exports of all five profiles.
+  The remaining four hit-delay differences, five eventless rows, and nine extra
+  Staff entries are unchanged. `item3-verification/tests.xml`, `inventory.json`,
+  and `item3-verification.ok` contain the evidence. The check deliberately covers
+  direct selectable melee roots, not synthesized autoattack aliases or every
+  combo successor.
 
 ## Remaining work
 
