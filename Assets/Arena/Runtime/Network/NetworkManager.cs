@@ -508,7 +508,15 @@ namespace Arena.Network
                 return;
 
             Debug.Log("[NetworkManager] Static subscription applied.");
+            // Measure the complete guard, including resource loading, hashing, and its diagnostics.
+            var validationTimer = System.Diagnostics.Stopwatch.StartNew();
             ContractVersionGuard.ValidationResult result = ContractVersionGuard.Validate(ctx.Db);
+            validationTimer.Stop();
+            string validationElapsedMs = validationTimer.Elapsed.TotalMilliseconds.ToString(
+                "F1", System.Globalization.CultureInfo.InvariantCulture);
+            Debug.Log(
+                $"[ContractVersionTiming] scope=full elapsed_ms={validationElapsedMs} "
+                + $"verified={result.Verified} missing={result.Missing} mismatches={result.Mismatches}");
             if (!result.IsCompatible)
             {
                 if (_isProvisionedMatchConnection)
