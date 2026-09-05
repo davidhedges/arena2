@@ -97,6 +97,63 @@ SharedData/
 UI/
 ```
 
+## Movement Runtime
+
+Verified against production source on 2026-09-04. This describes the implemented
+movement path; the two [original migration](../plans/movement-netcode-architecture.md)
+and [follow-up](../plans/movement-netcode-followup-plan.md) plans are historical,
+not an outstanding implementation queue.
+
+Ordinary player locomotion uses a **33 ms fixed simulation step**. The server
+constant is `FIXED_TICK_MILLIS` in [movement.rs](../server/src/movement.rs);
+[MovementNetcodeConfig](../Assets/Arena/Runtime/Input/MovementNetcodeConfig.cs)
+mirrors it for client prediction and replay. These are separate Rust/C#
+definitions, not one generated constant. Rendering runs at frame rate.
+
+| Boundary | Current implementation |
+| --- | --- |
+| Local input | [LocalPlayerMotor](../Assets/Arena/Runtime/Input/LocalPlayerMotor.cs) samples input/facing and retains a jump press until tick sampling. It reads predicted grounded state; it does not integrate position with `CharacterController.Move`. |
+| Command creation and prediction | [LocalMovementPredictionDriver](../Assets/Arena/Runtime/Input/LocalMovementPredictionDriver.cs) authors commands with increasing `InputTick` values in the bounded [MovementCommandBuffer](../Assets/Arena/Runtime/Input/MovementCommandBuffer.cs), then calls `MovementPrediction.Step` for each authored tick. |
+| Transport and pacing | [MovementNetDriver](../Assets/Arena/Runtime/Input/MovementNetDriver.cs) sends unsent commands and prunes acknowledged ticks. It feeds command-consumption and buffer-occupancy feedback into [InputLeadController](../Assets/Arena/Runtime/Input/InputLeadController.cs); the prediction driver uses that lead to pace authoring. |
+| Server receive and simulation | `send_movement_intent` in [movement.rs](../server/src/movement.rs) validates and buffers commands in [player_input.rs](../server/src/player_input.rs). `tick_player` in [game_loop.rs](../server/src/game_loop.rs) advances one input tick during ordinary locomotion and publishes `PlayerPhysics.last_processed_tick` with consumption/buffer feedback. |
+| Authoritative correction | [LocalMovementPredictor.Rebuild](../Assets/Arena/Runtime/Input/LocalMovementPredictor.cs) starts from the authoritative pose and ack, then replays buffered commands with later input ticks using the fixed step and movement-context history. |
+| Local presentation | [EntityRegistry.SetupLocalPlayer](../Assets/Arena/Runtime/Entity/EntityRegistry.cs) wires prediction separately from `LocalPresentationDriver` in [LocalPlayerCamera.cs](../Assets/Arena/Runtime/Presentation/LocalPlayerCamera.cs). [PlayerEntity](../Assets/Arena/Runtime/Entity/PlayerEntity.cs) creates the presentation root and moves the camera target beneath it. Small reconciliation displacements become a decaying visual offset; larger ones clear that offset. |
+| Remote presentation | [PlayerView](../Assets/Arena/Runtime/Presentation/PlayerView.cs) uses `ClientSimulationState` and [RemotePresentationBuffer](../Assets/Arena/Runtime/Simulation/RemotePresentationBuffer.cs) to interpolate ordinary movement snapshots with bounded velocity extrapolation. Special-movement tracks have a separate sampling path; remote players do not run local input replay. |
+
+The tick contract includes deliberate fallback behavior. If the next command
+is absent, `tick_player` advances the ack using retained axes/facing with
+`jump = false`; [PlayerIntent](../server/src/player_intent.rs) is that fallback
+state, not a replacement for the command queue. The receive path can also
+preserve a just-late jump by moving or merging its edge into the next tick.
+Special movement and lifecycle transitions have explicit handoff/reset paths;
+the ordinary locomotion description is not an exclusive-writer claim for all
+physics updates.
+
+Movement blocking, speed multipliers and capsule dimensions reach prediction
+through [ClientSimulationState.GetMovementContextForTick](../Assets/Arena/Runtime/Simulation/ClientSimulationState.cs).
+It selects authoritative context by tick and composes predicted restrictions.
+Default unblocked/1.0-speed values remain as a fallback when context history is
+missing, rather than being the normal hardcoded prediction context.
+
+The kinematic implementations remain separate: server
+`simulate_non_dummy_player_kinematics` in `game_loop.rs` and client
+[MovementPrediction.Step](../Assets/Arena/Runtime/Input/MovementPrediction.cs).
+[LocalMovementWorldContext](../Assets/Arena/Runtime/Input/LocalMovementWorldContext.cs)
+selects the client's world-specific collision environment. Shared collision
+inputs and mirrored constants do not by themselves prove parity in every scene.
+
+[MovementRegressionTests](../Assets/Arena/Tests/Editor/MovementRegressionTests.cs)
+include checks for mirrored constants, tick-scoped movement restrictions, and
+same-tick reconciliation preserving the rendered pose;
+[RemotePresentationBufferTests](../Assets/Arena/Tests/Editor/RemotePresentationBufferTests.cs)
+exercise interpolation/extrapolation. Those checks cover specific behavior,
+not all live collision cases or smoothness under jitter. This documentation
+review did not run a player session. The old follow-up's tick protocol,
+modifier-input and presentation-separation work is present; its broader
+ownership-cleanup and parity proposals require fresh evidence and scope before
+being treated as tasks. Keeping the motor, prediction driver and transport
+driver as separate classes is not itself evidence of an unfinished migration.
+
 ## Imported Content
 
 Do not mix imported packs into `Assets/Arena`. Keep vendor packages under:

@@ -1,4 +1,20 @@
-# Movement Netcode Follow-Up Plan
+# Movement Netcode Follow-Up Plan (Historical)
+
+> **Status: historical follow-up; the main diagnoses below are superseded.**
+> Source review on 2026-09-04 verified tick-indexed commands/acks and replay,
+> movement-context history in prediction, and separate local presentation.
+> See the [current movement runtime map](../docs/project-structure.md#movement-runtime)
+> for the implemented boundaries, deliberate fallbacks and verification limits.
+>
+> “Current,” “remaining,” and the phase ordering below refer to the migration
+> state when this plan was written. In particular, the tick-versus-sequence
+> mismatch, always-default prediction context and shared simulation/visual-root
+> diagnoses are not descriptions of today's ordinary movement path. The old
+> ownership-cleanup and collision-parity proposals require fresh evidence;
+> this review neither declares every success criterion proven nor turns those
+> proposals into an approved backlog.
+
+## Historical Proposal
 
 ## Why This Exists
 

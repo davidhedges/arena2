@@ -1,4 +1,19 @@
-# Movement And Netcode Plan
+# Movement And Netcode Plan (Historical)
+
+> **Status: historical migration proposal; not the current runtime contract
+> or an executable backlog.** Source review on 2026-09-04 confirms that fixed
+> input ticks, authoritative acknowledgments and local rewind/replay are
+> implemented. Read the [current movement runtime map](../docs/project-structure.md#movement-runtime)
+> for ownership, source links and verification limits.
+>
+> The text below preserves the original diagnosis and proposed migration.
+> Its `seq` / `last_processed_seq` examples, tick-rate suggestions, old
+> `Assets/Scripts` paths and instructions to replace the local runtime describe
+> earlier work. They do not specify today's schema or authorize another rewrite.
+> Goals not covered by the current runtime map remain historical proposals,
+> not newly verified defects or approved next steps.
+
+## Historical Proposal
 
 ## Goal
 
