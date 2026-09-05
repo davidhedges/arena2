@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::ability_cost::authored_upfront_resource_cost;
+use crate::weapon_catalog::{
+    WeaponAppearanceCatalog as WeaponCatalogSource, WeaponFamily as WeaponSource,
+};
 
 pub(crate) const COMBAT_BUILD_V2_SCHEMA_VERSION: u32 = 2;
 pub(crate) const STAFF_DISCIPLINE_ID: &str = "STAFF";
@@ -457,27 +460,6 @@ struct ProgressionGameplaySource {
     kind: String,
     #[serde(default)]
     resource_cost: f32,
-}
-
-#[derive(Deserialize)]
-struct WeaponCatalogSource {
-    schema_version: u32,
-    families: Vec<WeaponSource>,
-}
-
-#[derive(Deserialize)]
-struct WeaponSource {
-    item_def_id: String,
-    weapon_kind: String,
-    hand_requirement: String,
-    equip_slot: String,
-    combat_discipline_id: String,
-    variants: Vec<WeaponVariantSource>,
-}
-
-#[derive(Deserialize)]
-struct WeaponVariantSource {
-    color_id: String,
 }
 
 impl CombatBuildV2Catalog {

@@ -96,6 +96,8 @@ mod verdant_spirits;
 #[cfg(test)]
 #[path = "../../server/src/vfx_generation.rs"]
 mod vfx_generation;
+#[path = "../../server/src/weapon_catalog.rs"]
+mod weapon_catalog;
 #[path = "../../server/src/world_collision.rs"]
 mod world_collision;
 #[path = "stubs/world_interactions.rs"]

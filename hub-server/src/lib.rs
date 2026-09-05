@@ -7,7 +7,6 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use serde::Deserialize;
 use spacetimedb::{
     reducer, table, view, Identity, ReducerContext, ScheduleAt, SpacetimeType, Table, Timestamp,
     ViewContext,
@@ -19,6 +18,12 @@ mod ability_cost;
 #[path = "../../server/src/armor_catalog.rs"]
 mod armor_catalog;
 use armor_catalog::armor_set_catalog;
+#[path = "../../server/src/weapon_catalog.rs"]
+mod weapon_catalog;
+use weapon_catalog::{
+    WeaponAppearanceCatalog as HubWeaponAppearanceCatalogFile,
+    WeaponColor as HubWeaponColorAuthoring, WeaponFamily as HubWeaponFamilyAuthoring,
+};
 
 #[path = "../../server/src/combat_build_v2.rs"]
 mod combat_build_v2_contract;
@@ -132,7 +137,7 @@ const COMBAT_BUILD_V2_CATALOG_HASH: u64 = extend_catalog_hash(
 const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
     COMBAT_BUILD_V2_CATALOG_HASH,
     // Refresh existing Hub rows when projection logic changes without JSON edits.
-    b"combat-build-editor-projection-v4-shared-armor",
+    b"combat-build-editor-projection-v5-shared-weapons",
 );
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -1134,38 +1139,6 @@ pub fn hub_maintenance_tick(
         }
     }
     Ok(())
-}
-
-#[derive(Deserialize)]
-struct HubWeaponAppearanceCatalogFile {
-    schema_version: u32,
-    colors: Vec<HubWeaponColorAuthoring>,
-    families: Vec<HubWeaponFamilyAuthoring>,
-}
-
-#[derive(Deserialize)]
-struct HubWeaponColorAuthoring {
-    color_id: String,
-    display_name: String,
-    hex: String,
-}
-
-#[derive(Clone, Deserialize)]
-struct HubWeaponFamilyAuthoring {
-    item_def_id: String,
-    display_name: String,
-    icon_id: String,
-    weapon_kind: String,
-    hand_requirement: String,
-    equip_slot: String,
-    combat_discipline_id: String,
-    sort_order: u32,
-    variants: Vec<HubWeaponVariantAuthoring>,
-}
-
-#[derive(Clone, Deserialize)]
-struct HubWeaponVariantAuthoring {
-    color_id: String,
 }
 
 fn ensure_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {

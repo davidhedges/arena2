@@ -9,6 +9,9 @@ use crate::armor_catalog::{
     ARMOR_SET_APPRENTICE, ARMOR_SET_GILDED, ARMOR_SET_IRON, ARMOR_SET_LEATHER, ARMOR_SET_SPECS,
     ARMOR_TIER_LIGHT, HEAVY_ARMOR_CAST_SPEED_PENALTY, HEAVY_ARMOR_MOVE_SPEED_PENALTY,
 };
+use crate::weapon_catalog::{
+    WeaponAppearanceCatalog as WeaponAppearanceCatalogFile, WeaponFamily as WeaponFamilyAuthoring,
+};
 
 use std::time::Duration;
 
@@ -417,30 +420,6 @@ struct ItemDefinitionSpec {
     consumable_effect_kind: &'static str,
     consumable_resource_kind: &'static str,
     consumable_amount: f32,
-}
-
-#[derive(Deserialize)]
-struct WeaponAppearanceCatalogFile {
-    schema_version: u32,
-    families: Vec<WeaponFamilyAuthoring>,
-}
-
-#[derive(Clone, Deserialize)]
-struct WeaponFamilyAuthoring {
-    item_def_id: String,
-    display_name: String,
-    icon_id: String,
-    weapon_kind: String,
-    hand_requirement: String,
-    equip_slot: String,
-    combat_discipline_id: String,
-    default_color_id: String,
-    variants: Vec<WeaponVariantAuthoring>,
-}
-
-#[derive(Clone, Deserialize)]
-struct WeaponVariantAuthoring {
-    color_id: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -59,6 +59,7 @@ mod tick_metrics;
 mod verdant_spirits;
 #[cfg(test)]
 mod vfx_generation;
+mod weapon_catalog;
 mod world_collision;
 mod world_interactions;
 mod world_obstacles;
