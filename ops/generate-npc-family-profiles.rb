@@ -1,16 +1,15 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "digest"
 require "json"
 require "optparse"
 require "pathname"
 require "set"
+require_relative "npc_profile_paths"
 
 ROOT = Pathname.new(__dir__).join("..").expand_path
 INVENTORY_PATH = ROOT.join("Logs/npc-appearance-inventory-draft.json")
-PROFILE_DIR = ROOT.join("Assets/Arena/Content/NPC/VisualProfiles")
-CATALOG_PATH = ROOT.join("Assets/Arena/Resources/NpcVisualCatalog.asset")
+CATALOG_PATH = ROOT.join(NpcProfilePaths::CATALOG_PATH)
 PROFILE_SCRIPT_GUID = "4f7e660e5594473cb3f6e13e43c32f4a"
 ANIMATION_KEYS = %w[
   idle ready walk run basicAttack spellCastStart spellRelease spellCancel hit death
@@ -21,12 +20,22 @@ OptionParser.new do |parser|
   parser.banner = "Usage: ruby ops/generate-npc-family-profiles.rb --manifest FILE [--write]"
   parser.on("--manifest FILE", "Reviewed family authoring manifest") { |value| options[:manifest] = value }
   parser.on("--write", "Write profile assets, metas, and catalog rows") { options[:write] = true }
+  parser.on("--check-paths", "Check existing profile paths and GUIDs without generating content") { options[:check_paths] = true }
 end.parse!
+
+abort("Missing visual catalog: #{CATALOG_PATH}") unless CATALOG_PATH.file?
+catalog = CATALOG_PATH.read
+catalog_entries = NpcProfilePaths.catalog_entries(catalog)
+if options[:check_paths]
+  abort("--check-paths cannot be combined with --write") if options[:write]
+  catalog_entries.each_key { |visual_id| NpcProfilePaths.target(ROOT, visual_id, catalog_entries) }
+  puts "NPC profile paths PASS: #{catalog_entries.length} catalog references resolve with existing GUIDs. No assets written."
+  exit 0
+end
 
 abort("--manifest is required") unless options[:manifest]
 manifest_path = ROOT.join(options[:manifest]).expand_path
 abort("Missing manifest: #{manifest_path}") unless manifest_path.file?
-abort("Missing visual catalog: #{CATALOG_PATH}") unless CATALOG_PATH.file?
 
 manifest = JSON.parse(manifest_path.read)
 family_name = manifest.fetch("source_family_name")
@@ -141,10 +150,6 @@ def parse_prefab(path)
   { root_game_object_id: root[1][0], transform_paths: transform_paths }
 end
 
-def profile_guid(visual_id)
-  Digest::SHA256.hexdigest("Arena.NpcVisualProfile/#{visual_id}")[0, 32]
-end
-
 def controller_states(path)
   states = path.read.scan(/^--- !u!1102 &-?\d+\n(.*?)(?=^--- |\z)/m).map do |(block)|
     block[/^  m_Name: ([^\n]+)/, 1]
@@ -230,7 +235,6 @@ def profile_meta(guid)
   YAML
 end
 
-catalog = CATALOG_PATH.read
 catalog_rows = []
 generated = []
 appearances.each do |entry|
@@ -321,9 +325,10 @@ appearances.each do |entry|
 
   source_name = prefab_path.basename(".prefab").to_s
   profile_name = "#{source_name}_VisualProfile"
-  profile_path = PROFILE_DIR.join("#{profile_name}.asset")
-  meta_path = Pathname.new("#{profile_path}.meta")
-  guid = profile_guid(visual_id)
+  target = NpcProfilePaths.target(ROOT, visual_id, catalog_entries)
+  profile_path = target.profile_path
+  meta_path = target.meta_path
+  guid = target.guid
   yaml = profile_yaml(
     profile_name: profile_name,
     prefab_id: prefab_id,
@@ -337,15 +342,12 @@ appearances.each do |entry|
     sockets: sockets,
     reactions: reactions
   )
-  meta = profile_meta(guid)
+  meta = target.existing_meta || profile_meta(guid)
 
   if profile_path.exist? && profile_path.read != yaml
     abort("#{visual_id}: existing profile differs from reviewed generation: #{profile_path}") unless options[:write]
   end
-  if meta_path.exist? && meta_path.read != meta
-    abort("#{visual_id}: existing meta differs from deterministic GUID: #{meta_path}")
-  end
-  if catalog.match?(/^  - visualId: #{Regexp.escape(visual_id)}$/)
+  if catalog_entries.key?(visual_id)
     abort("#{visual_id}: catalog row already exists but generated profile is absent") unless profile_path.exist?
   else
     relative_prefab = prefab_path.relative_path_from(ROOT)
@@ -367,6 +369,7 @@ unless options[:write]
 end
 
 generated.each do |profile_path, yaml, meta_path, meta|
+  profile_path.dirname.mkpath
   profile_path.write(yaml)
   meta_path.write(meta)
   puts "Wrote #{profile_path.relative_path_from(ROOT)}"
