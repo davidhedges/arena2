@@ -3,8 +3,7 @@
 //! A fresh database is inert until exactly one of three paths wins:
 //! - the module owner bootstraps a provisioned 2v2 bot match;
 //! - the module owner bootstraps a provisioned open-world instance; or
-//! - the module owner explicitly enables the temporary local-direct
-//!   compatibility mode used by the current Hub button.
+//! - the module owner explicitly enables local-direct mode for local tooling.
 //!
 //! Orchestration configuration and reservations are private. The validated,
 //! selected-only combat-build materialization is public gameplay state and
@@ -208,35 +207,27 @@ pub(crate) fn initialize_match_module(ctx: &ReducerContext) {
     );
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ConnectionRoute {
+    LocalDirect,
+    Service,
+    ReservationRequired,
+}
+
 /// Resolves a connection before any player-facing row can be created.
 pub(crate) fn admit_connection(
     ctx: &ReducerContext,
     identity: Identity,
 ) -> Result<ConnectionAdmission, String> {
-    let Some(owner) = ctx
+    let owner = ctx
         .db
         .match_module_owner()
         .singleton_id()
-        .find(SINGLETON_ID)
-    else {
-        // Data-preserving publishes of databases created before this contract
-        // remain on the temporary direct path.
-        return Ok(ConnectionAdmission::LocalDirect);
-    };
-
-    match owner.deployment_mode.as_str() {
-        MODE_UNCONFIGURED => {
-            if identity == owner.identity {
-                Ok(ConnectionAdmission::Service)
-            } else {
-                Err("Match database is waiting for owner bootstrap".to_string())
-            }
-        }
-        MODE_LOCAL_DIRECT => Ok(ConnectionAdmission::LocalDirect),
-        MODE_PROVISIONED => {
-            if identity == owner.identity {
-                return Ok(ConnectionAdmission::Service);
-            }
+        .find(SINGLETON_ID);
+    match resolve_connection_route(owner.as_ref(), identity)? {
+        ConnectionRoute::LocalDirect => Ok(ConnectionAdmission::LocalDirect),
+        ConnectionRoute::Service => Ok(ConnectionAdmission::Service),
+        ConnectionRoute::ReservationRequired => {
             let config = require_bootstrap_config(ctx)?;
             let reservation = ctx.db.match_reservation().player_identity().find(identity);
             validate_provisioned_gameplay_admission(
@@ -248,28 +239,62 @@ pub(crate) fn admit_connection(
                 reservation.expect("validated reservation must exist"),
             ))
         }
+    }
+}
+
+fn resolve_connection_route(
+    owner: Option<&MatchModuleOwner>,
+    identity: Identity,
+) -> Result<ConnectionRoute, String> {
+    let owner = owner.ok_or_else(|| "Match module owner configuration is missing".to_string())?;
+    match owner.deployment_mode.as_str() {
+        MODE_UNCONFIGURED => {
+            if identity == owner.identity {
+                Ok(ConnectionRoute::Service)
+            } else {
+                Err("Match database is waiting for owner bootstrap".to_string())
+            }
+        }
+        MODE_LOCAL_DIRECT => Ok(ConnectionRoute::LocalDirect),
+        MODE_PROVISIONED => {
+            if identity == owner.identity {
+                Ok(ConnectionRoute::Service)
+            } else {
+                Ok(ConnectionRoute::ReservationRequired)
+            }
+        }
         unknown => Err(format!("Unknown match deployment mode {unknown}")),
     }
 }
 
 pub(crate) fn simulation_should_run(ctx: &ReducerContext) -> bool {
-    let Some(owner) = ctx
+    let owner = ctx
         .db
         .match_module_owner()
         .singleton_id()
-        .find(SINGLETON_ID)
-    else {
-        return true;
-    };
-
-    match owner.deployment_mode.as_str() {
-        MODE_LOCAL_DIRECT => true,
-        MODE_PROVISIONED => ctx
-            .db
+        .find(SINGLETON_ID);
+    let phase = if owner
+        .as_ref()
+        .is_some_and(|owner| owner.deployment_mode == MODE_PROVISIONED)
+    {
+        ctx.db
             .match_bootstrap_config()
             .singleton_id()
             .find(SINGLETON_ID)
-            .is_some_and(|config| provisioned_phase_runs_simulation(config.phase.as_str())),
+            .map(|config| config.phase)
+    } else {
+        None
+    };
+    deployment_runs_simulation(
+        owner.as_ref().map(|owner| owner.deployment_mode.as_str()),
+        phase.as_deref(),
+    )
+}
+
+fn deployment_runs_simulation(mode: Option<&str>, phase: Option<&str>) -> bool {
+    match mode {
+        Some(MODE_LOCAL_DIRECT) => true,
+        Some(MODE_PROVISIONED) => phase.is_some_and(provisioned_phase_runs_simulation),
         _ => false,
     }
 }
@@ -396,25 +421,11 @@ pub(crate) fn handle_provisioned_disconnect(
     Ok(true)
 }
 
-/// Temporary compatibility switch for the current direct-connect Unity path.
+/// Explicit local-direct mode for local tooling.
 /// It is deliberately owner-only and cannot replace a bootstrap decision.
 #[reducer]
 pub fn enable_local_direct_mode(ctx: &ReducerContext) -> Result<(), String> {
-    let Some(mut owner) = ctx
-        .db
-        .match_module_owner()
-        .singleton_id()
-        .find(SINGLETON_ID)
-    else {
-        // Data-preserving upgrade of a database that predates owner capture.
-        ctx.db.match_module_owner().insert(MatchModuleOwner {
-            singleton_id: SINGLETON_ID,
-            identity: ctx.sender(),
-            deployment_mode: MODE_LOCAL_DIRECT.to_string(),
-            updated_at: ctx.timestamp,
-        });
-        return Ok(());
-    };
+    let mut owner = require_module_owner(ctx)?;
     require_identity(
         ctx.sender(),
         owner.identity,
@@ -1216,6 +1227,68 @@ mod tests {
             .validate_draft(&draft, draft.revision)
             .expect("validate canonical v2 draft")
             .snapshot
+    }
+
+    #[test]
+    fn missing_owner_never_admits_or_runs_simulation() {
+        assert!(resolve_connection_route(None, Identity::ZERO).is_err());
+        assert!(!deployment_runs_simulation(None, None));
+        assert!(!deployment_runs_simulation(None, Some(PHASE_IN_PROGRESS)));
+    }
+
+    #[test]
+    fn admission_requires_explicit_owner_mode_and_reservation_route() {
+        let guest =
+            Identity::from_hex("0000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap();
+        let mut owner = MatchModuleOwner {
+            singleton_id: SINGLETON_ID,
+            identity: Identity::ZERO,
+            deployment_mode: MODE_UNCONFIGURED.to_string(),
+            updated_at: Timestamp::UNIX_EPOCH,
+        };
+        assert_eq!(
+            resolve_connection_route(Some(&owner), owner.identity),
+            Ok(ConnectionRoute::Service)
+        );
+        assert!(resolve_connection_route(Some(&owner), guest).is_err());
+        assert!(!deployment_runs_simulation(Some(MODE_UNCONFIGURED), None));
+
+        owner.deployment_mode = MODE_LOCAL_DIRECT.to_string();
+        for identity in [owner.identity, guest] {
+            assert_eq!(
+                resolve_connection_route(Some(&owner), identity),
+                Ok(ConnectionRoute::LocalDirect)
+            );
+        }
+        assert!(deployment_runs_simulation(Some(MODE_LOCAL_DIRECT), None));
+
+        owner.deployment_mode = MODE_PROVISIONED.to_string();
+        assert_eq!(
+            resolve_connection_route(Some(&owner), owner.identity),
+            Ok(ConnectionRoute::Service)
+        );
+        assert_eq!(
+            resolve_connection_route(Some(&owner), guest),
+            Ok(ConnectionRoute::ReservationRequired)
+        );
+        assert!(!deployment_runs_simulation(Some(MODE_PROVISIONED), None));
+        assert!(deployment_runs_simulation(
+            Some(MODE_PROVISIONED),
+            Some(PHASE_IN_PROGRESS)
+        ));
+        assert!(!deployment_runs_simulation(
+            Some(MODE_PROVISIONED),
+            Some(PHASE_ENDED)
+        ));
+
+        owner.deployment_mode = "UNKNOWN".to_string();
+        assert!(resolve_connection_route(Some(&owner), owner.identity).is_err());
+        assert!(resolve_connection_route(Some(&owner), guest).is_err());
+        assert!(!deployment_runs_simulation(
+            Some("UNKNOWN"),
+            Some(PHASE_IN_PROGRESS)
+        ));
     }
 
     #[test]
