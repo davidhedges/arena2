@@ -18,7 +18,6 @@ namespace Arena.Input
     public sealed class LocalMovementPredictionDriver : MonoBehaviour
     {
         private const string SpecialMovementFixedYCollisionPolicy = "STOP_AT_BLOCK_FIXED_Y";
-        private const string SpecialMovementKeepHeightCollisionPolicyLegacy = "STOP_AT_BLOCK_KEEP_HEIGHT";
         private const int RenderHistoryCapacity = 6;
         private const int PredictedStateHistoryCapacity = MovementNetcodeConfig.MaxPendingCommands * 2;
         private const float LocalRenderHardSnapDistance = 2.0f;
@@ -568,10 +567,6 @@ namespace Arena.Input
             return string.Equals(
                        collisionPolicy,
                        SpecialMovementFixedYCollisionPolicy,
-                       StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(
-                       collisionPolicy,
-                       SpecialMovementKeepHeightCollisionPolicyLegacy,
                        StringComparison.OrdinalIgnoreCase);
         }
 

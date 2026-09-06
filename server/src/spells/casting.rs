@@ -433,8 +433,6 @@ pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK: &str = "STOP_AT_BLOCK
 pub(crate) const KNOCKBACK_MOVEMENT_KIND: &str = "KNOCKBACK";
 pub(crate) const STAGGER_SHOVE_MOVEMENT_KIND: &str = "STAGGER_SHOVE";
 pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y: &str = "STOP_AT_BLOCK_FIXED_Y";
-const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY: &str =
-    "STOP_AT_BLOCK_KEEP_HEIGHT";
 const SPECIAL_MOVEMENT_RESOLVE_AT_END: &str = "RESOLVE_AT_END";
 const SPELL_BLOCK_IMPACT_HEIGHT_SCALE: f32 = 0.62;
 const SPELL_BLOCK_IMPACT_FORWARD_PADDING: f32 = 0.2;
@@ -3846,7 +3844,6 @@ fn fixed_y_terrain_blocks_special_movement(fixed_y: f32, ground_y: f32) -> bool 
 
 fn uses_fixed_y_collision_policy(collision_policy: &str) -> bool {
     collision_policy == SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y
-        || collision_policy == SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY
 }
 
 pub(crate) fn resolve_special_movement_y(

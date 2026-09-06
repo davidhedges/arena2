@@ -147,8 +147,6 @@ const SPECIAL_MOVEMENT_PATH_INSTANT: &str = "INSTANT";
 const SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC: &str = "PARABOLIC_ARC";
 const SPECIAL_MOVEMENT_FACING_FACE_PATH: &str = "FACE_PATH";
 const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y: &str = "STOP_AT_BLOCK_FIXED_Y";
-const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY: &str =
-    "STOP_AT_BLOCK_KEEP_HEIGHT";
 const SPECIAL_MOVEMENT_INPUT_DISCARD_LEAD_TICKS: u32 = 4;
 
 /// Pre-tick housekeeping sub-phases timed individually when profiling is
@@ -1884,7 +1882,6 @@ fn sample_special_movement_pose(
 
 fn uses_fixed_y_collision_policy(collision_policy: &str) -> bool {
     collision_policy == SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y
-        || collision_policy == SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY
 }
 
 /// Synchronizes the persistent fallback state used when the next queued input
@@ -2393,7 +2390,6 @@ mod tests {
         settle_stationary_playground_target, special_movement_grounded_state,
         sync_player_voluntary_move_epoch, PlayerIntent, PlayerPhysics, TickProfileSample,
         TickProfileWindowState, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
-        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
         SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC,
     };
     use crate::combat::new_player_state;
@@ -2711,11 +2707,6 @@ mod tests {
         assert!(!special_movement_grounded_state(
             "LINEAR",
             SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
-            true
-        ));
-        assert!(!special_movement_grounded_state(
-            "LINEAR",
-            SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
             true
         ));
     }

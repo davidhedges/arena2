@@ -84,7 +84,6 @@ namespace Arena.Simulation
         public const string PathModeParabolicArc = "PARABOLIC_ARC";
         public const string FacingPolicyFacePath = "FACE_PATH";
         public const string CollisionPolicyFixedY = "STOP_AT_BLOCK_FIXED_Y";
-        public const string CollisionPolicyKeepHeightLegacy = "STOP_AT_BLOCK_KEEP_HEIGHT";
 
         public static SampledSpecialMovementPose Sample(
             in SpecialMovementTrack track,
@@ -143,8 +142,7 @@ namespace Arena.Simulation
 
         private static bool UsesFixedYCollisionPolicy(string collisionPolicy)
         {
-            return string.Equals(collisionPolicy, CollisionPolicyFixedY, System.StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(collisionPolicy, CollisionPolicyKeepHeightLegacy, System.StringComparison.OrdinalIgnoreCase);
+            return string.Equals(collisionPolicy, CollisionPolicyFixedY, System.StringComparison.OrdinalIgnoreCase);
         }
     }
 }

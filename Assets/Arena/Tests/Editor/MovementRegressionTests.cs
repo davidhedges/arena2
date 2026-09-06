@@ -89,6 +89,29 @@ namespace Arena.Tests.Editor
             Assert.That(gameplayCollision!.text, Does.Contain("\"boxes\""));
         }
 
+        [TestCase(1f)]
+        [TestCase(7f)]
+        public void FixedYSpecialMovement_PreservesHeightAndAgreesWithPrediction(float groundHeight)
+        {
+            const string policy = "STOP_AT_BLOCK_FIXED_Y";
+            Type trackType = RequireType("Arena.Simulation.SpecialMovementTrack");
+            object track = Activator.CreateInstance(trackType,
+                "DAGGER_BREAKAWAY", "LINEAR", 1_000L, 2_000L,
+                new Vector3(0f, 3f, 0f), new Vector3(4f, 3f, 0f),
+                0f, 0f, "FACE_START", policy, "RESOLVE_AT_END")!;
+            Func<float, float, float, float> terrain = (_, _, _) => groundHeight;
+            MethodInfo sample = RequireType("Arena.Simulation.SpecialMovementRuntimeSampler")
+                .GetMethod("Sample", BindingFlags.Public | BindingFlags.Static)!;
+            object pose = sample.Invoke(null, new object?[] { track, 2_000L, terrain })!;
+            Assert.That((Vector3)pose.GetType().GetProperty("Position")!.GetValue(pose)!,
+                Is.EqualTo(new Vector3(2f, 3f, 0f)));
+            MethodInfo predictedPolicy = RequireType("Arena.Input.LocalMovementPredictionDriver")
+                .GetMethod("UsesFixedYCollisionPolicy", BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(predictedPolicy.Invoke(null, new object[] { policy }), Is.True);
+            Assert.That(predictedPolicy.Invoke(null, new object[] { policy.ToLowerInvariant() }), Is.True);
+            Assert.That(predictedPolicy.Invoke(null, new object[] { "STOP_AT_BLOCK" }), Is.False);
+        }
+
         [Test]
         public void SharedOpenWorldGameplayCollision_DoesNotContainBackgroundBoxes()
         {
