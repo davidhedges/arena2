@@ -97,13 +97,29 @@ are already running:
 python3 ops/benchmark-local-match-start.py --samples 20
 ```
 
-The probe uses the public Hub and match WebSocket APIs, reuses one identity,
-applies the production 44-query PvP initial subscription, cancels every sampled
-ticket, and verifies the provisioner ledger reports every database `CLEANED`.
+The probe uses the public Hub and match WebSocket APIs, reuses one dedicated
+identity across invocations, applies the production 36-query PvP initial
+subscription, cancels every sampled ticket, and verifies the provisioner ledger
+reports every database `CLEANED`.
 Its ticket hashes correlate with the provisioner's `match_startup_timing`
 events for stage-level p50/p95 calculations. It requires the
 `websocket-client` Python package and intentionally does not measure Unity scene
 loading.
+
+The first run saves a private credential under the repository's ignored
+`.arena-local/match-benchmark/` directory **before connecting to the Hub**.
+Later runs authenticate with that credential, including when Unity's `Library/`
+has been regenerated. Credentials are scoped to the local server origin and Hub;
+`localhost` and `127.0.0.1` share a scope. One run holds that scope's lock through
+match cleanup, so concurrent invocations fail before opening another Hub session.
+The benchmark accepts loopback server origins only.
+
+Keep this directory: deleting its credential file means the next run creates a
+new player. Corrupt, mismatched or rejected credentials cause an error instead of
+an anonymous retry. Restore the same credential to recover that benchmark player;
+the script never uses Unity's or the provisioner's credentials, resets profiles,
+or deletes old saved players. This benchmark measures match startup with a reused
+player; it does not exercise fresh-profile creation on every invocation.
 
 Configuration defaults are documented in `local.env.example`. The default
 ledger lives under Unity's ignored `Library/` directory. Cleaned rows are kept

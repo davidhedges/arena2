@@ -112,6 +112,7 @@ Assets/Arena/Content/Scenes/OpenWorld/DungeonExamples.unity
 Assets/Arena/Content/Scenes/OpenWorld/DungeonExamples.unity.meta
 
 # Infrastructure local state and secrets
+.arena-local/
 .env
 .env.local
 .env.*.local

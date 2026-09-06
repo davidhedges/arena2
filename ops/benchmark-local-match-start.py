@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Benchmark the local disposable PvP match-start path.
 
-The probe keeps one anonymous identity for the entire run, requests serial
+The probe reuses one dedicated local identity across runs, requests serial
 unranked 2v2 bot matches through the public Hub API, authenticates to every
 assigned match with that same identity, and applies the production 36-query
 PvP initial subscription plus a canonical combat-build audit subscription.
@@ -16,25 +16,42 @@ Unity scene loading. Pair its JSON output with the provisioner's correlated
 The local SpacetimeDB server and provisioner must already be running:
 
   python3 ops/benchmark-local-match-start.py --samples 20
+
+Credentials live under ignored .arena-local/match-benchmark/, outside Unity's
+disposable Library folder, scoped to the local server and Hub. Keep this
+directory to keep reusing the same player. Invalid credentials stop the run;
+they are never silently replaced. Concurrent runs against the same scope
+are rejected until the first run finishes its match cleanup.
 """
 
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import math
+import os
 import pathlib
+import re
 import sqlite3
+import stat
 import statistics
+import tempfile
 import time
+import urllib.parse
+import urllib.request
 import uuid
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import websocket
 
 
 PROTOCOL = "v1.json.spacetimedb"
+IDENTITY_DIRECTORY = (
+    pathlib.Path(__file__).resolve().parents[1] / ".arena-local/match-benchmark"
+)
 DatabaseRow = list[Any] | dict[str, Any]
 HUB_QUERIES = [
     'SELECT * FROM "my_hub_player"',
@@ -135,6 +152,100 @@ def option_value(value: Any) -> Any:
         if value[0] == 1:
             return None
     return value
+
+
+def local_server_uri(value: str) -> str:
+    parsed = urllib.parse.urlsplit(value)
+    if (
+        parsed.scheme not in {"ws", "wss"}
+        or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("The benchmark requires a local ws:// or wss:// server origin")
+    host = "[::1]" if parsed.hostname == "::1" else "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "wss" else 80)
+    return f"{parsed.scheme}://{host}:{port}"
+
+
+def validate_benchmark_identity(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise ValueError("Invalid benchmark credential; restore its saved file before retrying")
+    identity = normalize_identity(value.get("identity"))
+    token = value.get("token")
+    if not re.fullmatch(r"[0-9a-f]{64}", identity) or not isinstance(token, str) or (
+        not token or any(char.isspace() for char in token)
+    ):
+        raise ValueError("Invalid benchmark credential; restore its saved file before retrying")
+    return {"identity": identity, "token": token}
+
+
+@contextmanager
+def benchmark_identity(
+    server_uri: str,
+    hub_database: str,
+    timeout_seconds: float,
+    directory: pathlib.Path = IDENTITY_DIRECTORY,
+) -> Iterator[dict[str, str]]:
+    """Persist before any Hub connection; hold the scope lock through cleanup."""
+    server_uri = local_server_uri(server_uri)
+    scope = {"server_uri": server_uri, "hub_database": hub_database}
+    key = hashlib.sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if directory.is_symlink():
+        raise ValueError("Benchmark credential directory must not be a symlink")
+    directory.chmod(0o700)
+    path = directory / f"{key}.json"
+    lock_fd = os.open(directory / f"{key}.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(lock_fd, "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("Another benchmark is already using this local Hub identity") from None
+        if path.is_symlink():
+            raise ValueError("Benchmark credential file must not be a symlink")
+        if path.exists():
+            if stat.S_IMODE(path.stat().st_mode) & 0o077:
+                raise ValueError("Benchmark credential file must have private permissions (chmod 600)")
+            try:
+                saved = json.loads(path.read_text())
+            except (ValueError, UnicodeError):
+                raise ValueError("Invalid benchmark credential; restore its saved file before retrying") from None
+            if not isinstance(saved, dict) or any(saved.get(k) != v for k, v in scope.items()):
+                raise ValueError("Benchmark credential belongs to a different server or Hub")
+            credential = validate_benchmark_identity(saved)
+        else:
+            # This endpoint issues credentials without opening a database connection
+            # or creating a Hub profile: https://spacetimedb.com/docs/http/identity/
+            origin = server_uri.replace("ws:", "http:", 1).replace("wss:", "https:", 1)
+            request = urllib.request.Request(f"{origin}/v1/identity", method="POST")
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                try:
+                    issued = json.load(response)
+                except (ValueError, UnicodeError):
+                    raise ValueError("Local server returned an invalid benchmark credential") from None
+            credential = validate_benchmark_identity(issued)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode="w", dir=directory, delete=False) as output:
+                    temporary = pathlib.Path(output.name)
+                    json.dump({**scope, **credential}, output, sort_keys=True)
+                    output.write("\n")
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.replace(temporary, path)
+                directory_fd = os.open(directory, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+        yield credential
 
 
 def decoded_row(value: Any) -> DatabaseRow | None:
@@ -487,14 +598,18 @@ class Connection:
         self.ws.settimeout(timeout_seconds)
         self.timeout_seconds = timeout_seconds
         self.request_id = 0
-        first = self.receive()
-        issued = first.get("IdentityToken")
-        if not isinstance(issued, dict):
-            raise RuntimeError(f"expected IdentityToken, received {list(first)}")
-        self.identity = normalize_identity(issued.get("identity"))
-        self.token = str(issued.get("token") or token or "")
-        if not self.identity or not self.token:
-            raise RuntimeError("SpacetimeDB did not issue an identity and token")
+        try:
+            first = self.receive()
+            issued = first.get("IdentityToken")
+            if not isinstance(issued, dict):
+                raise RuntimeError(f"expected IdentityToken, received {list(first)}")
+            self.identity = normalize_identity(issued.get("identity"))
+            self.token = str(issued.get("token") or token or "")
+            if not self.identity or not self.token:
+                raise RuntimeError("SpacetimeDB did not issue an identity and token")
+        except BaseException:
+            self.close()
+            raise
 
     def receive(self) -> dict[str, Any]:
         while True:
@@ -584,9 +699,30 @@ class Connection:
 
 
 class Benchmark:
-    def __init__(self, server_uri: str, hub_database: str, timeout_seconds: float):
+    def __init__(
+        self, server_uri: str, hub_database: str, timeout_seconds: float,
+        *, credential: dict[str, str],
+    ):
         self.timeout_seconds = timeout_seconds
-        self.hub = Connection(server_uri, hub_database, timeout_seconds)
+        credential = validate_benchmark_identity(credential)
+        try:
+            self.hub = Connection(
+                server_uri, hub_database, timeout_seconds, token=credential["token"]
+            )
+        except Exception:
+            raise RuntimeError(
+                "Could not connect with the saved benchmark credential. Check the local "
+                "server and credential; no replacement identity was created."
+            ) from None
+        try:
+            if self.hub.identity != credential["identity"]:
+                raise RuntimeError("Hub identity does not match the saved benchmark credential")
+            self.read_hub_build()
+        except BaseException:
+            self.hub.close()
+            raise
+
+    def read_hub_build(self) -> None:
         subscription = self.hub.subscribe(HUB_QUERIES)
         initial = self.hub.wait_for_initial_subscription(subscription)
         update = initial.get("database_update")
@@ -862,19 +998,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    benchmark = Benchmark(args.server_uri, args.hub_database, args.timeout_seconds)
-    samples: list[dict[str, Any]] = []
-    try:
-        for ordinal in range(1, args.samples + 1):
-            samples.append(benchmark.sample(ordinal))
-    finally:
-        benchmark.close()
+    server_uri = local_server_uri(args.server_uri)
+    with benchmark_identity(server_uri, args.hub_database, args.timeout_seconds) as credential:
+        benchmark = Benchmark(
+            server_uri, args.hub_database, args.timeout_seconds, credential=credential
+        )
+        samples: list[dict[str, Any]] = []
+        try:
+            for ordinal in range(1, args.samples + 1):
+                samples.append(benchmark.sample(ordinal))
+        finally:
+            benchmark.close()
 
-    cleanup = wait_for_cleanup(
-        args.ledger,
-        {str(sample["ticket"]) for sample in samples},
-        args.cleanup_timeout_seconds,
-    )
+        cleanup = wait_for_cleanup(
+            args.ledger,
+            {str(sample["ticket"]) for sample in samples},
+            args.cleanup_timeout_seconds,
+        )
     print(
         json.dumps(
             {
