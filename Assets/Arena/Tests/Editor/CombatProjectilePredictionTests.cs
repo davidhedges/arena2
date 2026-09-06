@@ -129,7 +129,7 @@ namespace Arena.Tests.Editor
                 ?? throw new InvalidOperationException("WeaponProjectileVFX not found in Assembly-CSharp.");
             ConstructorInfo constructor = vfxType
                 .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
-                .Single(candidate => candidate.GetParameters().Length == 12);
+                .Single();
             object vfx = constructor.Invoke(new object?[]
             {
                 "stationary-test",
@@ -142,6 +142,7 @@ namespace Arena.Tests.Editor
                 null,
                 1f,
                 true,
+                false,
                 false,
                 false,
             });
@@ -170,9 +171,53 @@ namespace Arena.Tests.Editor
             }
             finally
             {
-                ((IDisposable)vfx).Dispose();
+                // Runtime destruction is deferred; native EditMode fixture cleanup is immediate.
+                var group = (GameObject)vfxType.GetField("_group", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(vfx)!;
+                UnityEngine.Object.DestroyImmediate(group);
+                vfxType.GetMethod("Dispose")!.Invoke(vfx, null);
                 UnityEngine.Object.DestroyImmediate(prefab);
             }
+        }
+
+        [TestCase("VFX_FIREBALL_PROJECTILE_01", "OnImpact")]
+        [TestCase("VFX_FIREBALL_PROJECTILE_01", "OnFizzle")]
+        [TestCase("VFX_ICICLE_PROJECTILE_01", "OnImpact")]
+        [TestCase("VFX_ICICLE_PROJECTILE_01", "OnFizzle")]
+        public void CurrentProjectileBody_TravelsReconcilesAndTerminates(string vfxId, string terminalMethod)
+        {
+            Type registryType = RuntimeAssembly.GetType("Arena.Presentation.CombatVFXTemplateRegistry", true)!;
+            object template = registryType.GetMethod("ResolveTemplate")!.Invoke(null, new object[] { vfxId })!;
+            Assert.That(template, Is.Not.Null, "The current factory must resolve the authored projectile body.");
+            var prefab = (GameObject)template.GetType().GetProperty("Prefab")!.GetValue(template)!;
+            Assert.That(prefab, Is.Not.Null);
+            Type vfxType = RuntimeAssembly.GetType("Arena.Presentation.VFX.WeaponProjectileVFX", true)!;
+            object vfx = vfxType.GetConstructors(BindingFlags.Instance | BindingFlags.Public).Single().Invoke(new object?[]
+            {
+                "cleanup-" + vfxId, new Vector3(1f, 2f, 3f), Vector3.forward,
+                10f, 100f, 1f, prefab, null, 1f, true, false, true, false,
+            });
+            var group = (GameObject)vfxType.GetField("_group", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vfx)!;
+            MethodInfo tick = vfxType.GetMethod("Tick")!;
+            try
+            {
+                Assert.That(group.transform.childCount, Is.GreaterThan(0));
+                Assert.That((bool)tick.Invoke(vfx, new object[] { 0.1f })!, Is.True);
+                Assert.That(group.transform.position.z, Is.GreaterThan(3f));
+                Vector3 authoritative = new(8f, 2f, 8f);
+                vfxType.GetMethod("OnUpdate", new[] { typeof(Vector3), typeof(Vector3), typeof(float), typeof(bool) })!
+                    .Invoke(vfx, new object[] { authoritative, Vector3.right, 10f, true });
+                Assert.That(group.transform.position, Is.EqualTo(authoritative));
+                vfxType.GetMethod(terminalMethod)!.Invoke(vfx, new object[] { authoritative });
+                // Authored VFX Graph sweeps can finish cosmetically after the terminal event, capped at two seconds.
+                Assert.That((bool)tick.Invoke(vfx, new object[] { 2.1f })!, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(group);
+                vfxType.GetMethod("Dispose")!.Invoke(vfx, null);
+            }
+            Assert.That((bool)tick.Invoke(vfx, new object[] { 0.1f })!, Is.False);
         }
 
         private static bool ShouldSnapAuthoritativeVisualUpdate(

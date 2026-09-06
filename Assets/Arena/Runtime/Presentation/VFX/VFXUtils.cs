@@ -14,7 +14,6 @@ namespace Arena.Presentation.VFX
         private static Texture2D? _glowTexture96;
         private static Shader? _additiveGlowShader;
         private static Shader? _beamShader;
-        private static Shader? _fireballShader;
         private static Shader? _shieldShader;
         private static Shader? _negateDomeShader;
 
@@ -140,19 +139,6 @@ namespace Arena.Presentation.VFX
                     "Universal Render Pipeline/Unlit",
                     "Standard");
             return _beamShader;
-        }
-
-        public static Shader GetFireballShader()
-        {
-            if (_fireballShader == null)
-                _fireballShader = FindFirstShader(
-                    "Arena/Fireball",
-                    "Particles/Standard Unlit",
-                    "Sprites/Default",
-                    "Unlit/Color",
-                    "Universal Render Pipeline/Unlit",
-                    "Standard");
-            return _fireballShader;
         }
 
         public static Shader GetShieldShader()
@@ -307,23 +293,6 @@ namespace Arena.Presentation.VFX
             return mesh;
         }
 
-        /// <summary>
-        /// When the actual VFX spawn position differs from the server's origin
-        /// (e.g., hand bone socket vs server auth position), recompute the
-        /// direction so the projectile heads toward the intended target line.
-        /// </summary>
-        public static Vector3 CorrectedDirection(
-            Vector3 actualSpawn,
-            Vector3 serverOrigin,
-            Vector3 serverDirection,
-            float maxDistance)
-        {
-            float dist = maxDistance > 0f ? maxDistance : 40f;
-            Vector3 targetPoint = serverOrigin + serverDirection * dist;
-            Vector3 corrected = (targetPoint - actualSpawn).normalized;
-            return corrected.sqrMagnitude > 0.0001f ? corrected : serverDirection;
-        }
-
         private static Mesh CreateQuadMesh()
         {
             var mesh = new Mesh();
@@ -350,15 +319,6 @@ namespace Arena.Presentation.VFX
         public static float ExponentialAlpha(float dt, float halfLifeSeconds)
         {
             return 1f - Mathf.Pow(2f, -dt / halfLifeSeconds);
-        }
-
-        /// <summary>
-        /// Legacy spawn-origin helper for unmigrated VFX classes.
-        /// Migrated spells resolve anchors through CombatVFXAnchorResolver.
-        /// </summary>
-        public static Vector3 ResolveSpawnOrigin(SpacetimeDB.Types.CombatEvent castEvent)
-        {
-            return new Vector3(castEvent.OriginX, castEvent.OriginY, castEvent.OriginZ);
         }
 
     }
