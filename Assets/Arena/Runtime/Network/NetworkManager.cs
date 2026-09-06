@@ -318,7 +318,9 @@ namespace Arena.Network
             _requestedGameplayScope = GameplayScope.None;
             _appliedGameplayScope = GameplayScope.None;
             _scopeTransitionInFlight = false;
-            _scopeTransitionGeneration = 0;
+            // Never reuse a scope generation across connections: callbacks from
+            // a disposed subscription can still be queued when we reconnect.
+            _scopeTransitionGeneration++;
 
             Debug.Log($"[NetworkManager] Connected. Identity={identity}");
 
@@ -775,7 +777,7 @@ namespace Arena.Network
             _requestedGameplayScope = GameplayScope.None;
             _appliedGameplayScope = GameplayScope.None;
             _scopeTransitionInFlight = false;
-            _scopeTransitionGeneration = 0;
+            _scopeTransitionGeneration++;
             _isProvisionedMatchConnection = false;
             _provisionedConnectionHasFullSchema = false;
             _hasExpectedProvisionedIdentity = false;

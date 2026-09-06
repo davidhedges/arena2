@@ -1,6 +1,6 @@
 # Combat Authoring Contract
 
-Status: **Current for Combat Build v2; ownership guards updated 2026-09-05.**
+Status: **Current for Combat Build v2; timing and authority reviewed 2026-09-06.**
 
 This is the entry point for adding or reviewing player combat actions. The
 canonical build hierarchy is:
@@ -18,6 +18,85 @@ Prefer Unity editor authoring tools when they exist. Use
 `docs/ability-implementation-prompt-template-2026-04-22.md` only as the manual
 fallback. Animation-layer ownership remains in
 `docs/combat-animation-authoring-contract.md`.
+
+## Hit Validation Timing
+
+These are the current contracts for action input, authoritative simulation,
+and remote presentation. The July audits describe the migration and accepted
+tradeoffs; their pre-migration defect descriptions are not the current behavior.
+
+| Path | Input and prediction | Server authority | Remote presentation and permitted disagreement |
+| --- | --- | --- | --- |
+| Melee | Action-bar dispatch runs advisory range/facing/LOS checks against the local pose and rendered target, sends a prediction token and target-view timestamp, and predicts costs and animation. | `melee.rs` uses the current authoritative attacker pose, bounds target rewind at press, then schedules the authored impact. Impact rechecks target position with the frozen rewind delay and uses current life, world, relation, LOS policy, and defenses. | Cast/contact facts drive remote animation and cues. A locally valid turn-and-strike can be rejected before the movement turn reaches authority. Moving out during windup can cause a silent whiff. Neither acceptance nor a predicted contact cue promises damage. |
+| Fireball | `SpellInputHandler` predicts instant release and a projectile body, carrying a prediction token and movement input tick with the cast pose. | Bounded action-snapshot validation can use the predicted launch pose; an excessive discrepancy falls back to authority. Press gates may rewind the target. Projectile movement, swept collision, and defense resolution use current simulation state. | `CombatVFXDispatcher` correlates the accepted action to its exact prediction token, adopts the body, and follows projectile presentation events. Homing and visual smoothing can differ briefly from the server trajectory; damage comes from authoritative impact resolution. |
+| Movement | `LocalMovementPredictionDriver` authors fixed 33 ms commands ahead of authority and predicts immediately. | The server consumes queued commands in tick order; a missing command retains movement axes/yaw without repeating jump. Acknowledgements include whether a real command was consumed. | The local predictor rebuilds from authority and replays pending inputs. Remote actors use delayed interpolation and bounded extrapolation. A rendered target is deliberately behind the current server pose. |
+| Match handoff | The Hub creates a ticket and freezes the selected build; the assignment must identify a supported map, same credential cluster, and valid database. | Hub ticket expiry and match admission use server time. The reserved human's connection starts countdown. Initial subscription and map-contract validation gate match readiness; scoped world rows and scene loading follow. | Readiness means accepted initial state, not a fully rendered scene. Loading can consume countdown. Later Hub edits do not alter a match's frozen build. |
+
+Gameplay cooldown prediction, gates, and HUD countdowns use `ArenaServerClock`;
+prediction rollback records the converted timestamp. Hub deadlines belong to
+the Hub/match clock domain, not the PC's wall clock or a previous gameplay
+connection's estimate. Client handoff waits use monotonic elapsed-time limits;
+the server rejects expired admission. Subscription callbacks from a replaced
+connection must never advance or clear the current scope.
+
+Exact token/action identity owns reconciliation. Two casts of the same spell
+are distinct even when their prediction windows overlap. A transaction's
+cached acceptance row can establish identity before its row callback runs;
+spell name alone cannot. Predicted melee contact cues are cosmetic and may be
+false positives; HP, damage numbers, and block/parry results remain authoritative.
+
+The intentional tradeoffs are documented in
+[the lag-compensation design](lag-compensation-design-2026-07-04.md),
+[the sweep/projectile decision](sweep-projectile-rewind-design-2026-07-05.md),
+[the feel audit](multiplayer-feel-audit-2026-07-02.md), and
+[the match-start plan](match-start-latency-optimization-plan-2026-08-11.md).
+Change them only with an explicit gameplay decision supported by measurements.
+
+### Maintenance evidence — 2026-09-06
+
+The cooldown clock conversion was already implemented in `cd83bcc2`. The
+separate Hub assignment preflight still used PC UTC: an unchanged assignment
+with 30 server seconds remaining passed at zero skew and failed at +120 s.
+Client waits now use elapsed time; server admission still enforces expiry.
+
+Managed regressions reproduced three same-spell VFX miscorrelations (unknown,
+already-consumed, and expired action identity) and reused subscription
+generations for all three delayed scope callbacks. Exact cached acceptance
+now resolves VFX without depending on callback order, and scope generations
+remain distinct across reconnects. `NetcodeBoundaryTests` covers these cases,
+rejected acceptance, server clock offsets, deadline validity, and the cluster
+guard. Its 16 cases and the 25 existing clock/rollback cases pass (41 total)
+through a standalone .NET NUnit runner; runtime,
+Editor, and EditMode test assemblies compile without launching Unity.
+The baseline server/Hub suites passed 824/25 tests; the disposable-match
+admission and frozen-build suites passed 9/11 tests.
+
+Measurements preserve the distinction between current protocol probes and
+saved gameplay captures:
+
+| Measurement | Evidence | Limit |
+| --- | --- | --- |
+| Turn then melee | The saved Editor session beginning `2026-09-06T04:32:56Z` contains four accepted server melee requests, zero server rejections, two local range rejections, and three local GCD rejections. | No controlled turn sequence is identified; this does **not** establish a turn-related rejection rate. |
+| Predicted contact cues | CSV session `2026-09-06T04:51:17Z`: three cues fired, three matched, zero recorded false positives. | Small sample; not evidence that false positives cannot occur. |
+| Movement correction | Same CSV session: 588 acknowledgement ticks, five fallback acknowledgements (0.85%), zero snaps/resyncs or absorbed correction distance; three jumps predicted and confirmed. | Nineteen sampled seconds, with zero reported reconciliation error. No shaped-latency retuning conclusion. |
+| Loading during countdown | Saved startup trace: transport connected at 1567.0 ms, scene requested at 2850.3 ms, scene loaded at 6866.4 ms. Connection-to-load is 5299.4 ms against a three-second server countdown. | One Editor capture; scene-loaded is not a measurement of the first controllable/rendered frame. A loaded handshake would change the accepted readiness rule. |
+| Fresh local match startup | Three serial `benchmark-local-match-start.py --samples 3` samples reached initial state in 1046.3, 887.9, and 902.3 ms (median 902.3 ms). | Protocol-only; does not execute the changed Unity code or load a scene. |
+
+The serial benchmark exposed a separate cleanup fault: replacing the dedicated
+probe identity's ticket removed the prior frozen Hub snapshot, causing two
+allocations to enter `ORPHANED` with `frozen Hub combat-build snapshot is missing`.
+The benchmark therefore failed its automatic-cleanup gate despite completing
+all three timing samples. Both exact probe allocations were checked against
+their database identities, bootstrap match IDs, and provisioner ownership,
+then removed through the existing guarded deletion method. All three ledger
+entries reached `CLEANED`; all 69 existing Hub profiles and their durable v2
+children, audit, and catalogs were verified unchanged. The cleanup fault is
+recorded here, not changed by this client maintenance work.
+
+No new Unity play session was run for this maintenance. A controlled
+turn-and-strike capture and visual verification of repeated Fireballs remain
+unverified; the available measurements do not justify changing melee geometry,
+cosmetic contact prediction, movement lead, or countdown/readiness behavior.
 
 ## Source ownership
 

@@ -1,5 +1,9 @@
 # Netcode Slices — Open / Pending / Deferred (updated 2026-07-05)
 
+For current timing, authority, and readiness rules, start with the
+[combat contract](combat-authoring-contract.md#hit-validation-timing).
+The slice decisions below retain their July evidence and dates.
+
 **This is the "what's left" board for the netcode migration.** Companion to
 `docs/netcode-design-review-2026-07-03.md` (the plan) and the per-slice design
 docs. Slices **S1–S9 are delivered and owner-accepted** (see the design

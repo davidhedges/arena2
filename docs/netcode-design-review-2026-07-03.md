@@ -1,5 +1,9 @@
 # Adversarial Netcode & Combat-Validation Design Review — 2026-07-03
 
+Current runtime behavior is summarized in the
+[combat contract](combat-authoring-contract.md#hit-validation-timing).
+The findings below preserve the July review, including defects subsequently fixed.
+
 > **📌 CURRENT STATUS (2026-07-05) → see [`docs/netcode-open-items.md`](netcode-open-items.md).**
 > S1–S9 delivered + accepted. **S10 (sweep rewind) is implemented, server-half
 > verified, and ships default ON** (owner call 2026-07-05 on the strength of the

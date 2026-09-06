@@ -34,7 +34,7 @@ namespace Arena.Presentation
 
         private void Update()
         {
-            // Local player position/rotation driven by LocalPlayerMotor.
+            // Local pose is driven by LocalMovementPredictionDriver; this view presents remotes.
             if (_isLocalPlayer) return;
 
             if (_simState == null || !_simState.HasState) return;

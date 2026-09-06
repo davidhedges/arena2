@@ -1467,7 +1467,9 @@ namespace Arena.Presentation
             if (!string.IsNullOrWhiteSpace(row.ActionInstanceId))
                 _spellVfxTokenByActionInstance[row.ActionInstanceId] = pending.TokenKey;
 
-            _pendingSpellVfxByToken.Remove(pending.TokenKey);
+            // Retain cue suppression until TTL: combat release and projectile
+            // release callbacks can arrive in either order in this transaction.
+            _pendingSpellVfxByToken[pending.TokenKey] = pending.WithProjectileKey(string.Empty);
             return true;
         }
 
@@ -1477,28 +1479,45 @@ namespace Arena.Presentation
             out PendingPredictedSpellVfx pending)
         {
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // The SDK updates the full transaction cache before invoking row
+            // callbacks. Acceptance may already be cached even if its callback
+            // has not run; only that exact action/token pair can claim a visual.
+            if (!string.IsNullOrWhiteSpace(actionInstanceId)
+                && !_spellVfxTokenByActionInstance.ContainsKey(actionInstanceId)
+                && _subscribedConnection != null)
+            {
+                RecordPredictedSpellVfxAcceptance(
+                    actionInstanceId,
+                    _subscribedConnection.Db.PredictedActionResult.Iter());
+            }
+
             if (!string.IsNullOrWhiteSpace(actionInstanceId)
                 && _spellVfxTokenByActionInstance.TryGetValue(actionInstanceId, out string tokenKey)
                 && _pendingSpellVfxByToken.TryGetValue(tokenKey, out pending)
+                && string.Equals(pending.SpellId, WireIdentifier.Normalize(spellId), StringComparison.Ordinal)
                 && nowMs <= pending.ExpiresAtMs)
             {
                 return true;
             }
 
-            string normalizedSpellId = WireIdentifier.Normalize(spellId);
-            foreach (PendingPredictedSpellVfx candidate in _pendingSpellVfxByToken.Values)
-            {
-                if (nowMs > candidate.ExpiresAtMs)
-                    continue;
-                if (!string.Equals(candidate.SpellId, normalizedSpellId, StringComparison.Ordinal))
-                    continue;
-
-                pending = candidate;
-                return true;
-            }
-
             pending = default;
             return false;
+        }
+
+        private void RecordPredictedSpellVfxAcceptance(
+            string actionInstanceId,
+            IEnumerable<PredictedActionResult> results)
+        {
+            foreach (PredictedActionResult row in results)
+            {
+                if (row.Family == PredictedActionFamily.SpellCast
+                    && row.Result == ActionResultKind.Accepted
+                    && string.Equals(row.ActionInstanceId, actionInstanceId, StringComparison.Ordinal))
+                {
+                    OnPredictedActionResultInsert(null!, row);
+                    return;
+                }
+            }
         }
 
         private static bool IsLocalAuthoritativePredictedSpellEvent(CombatEvent row)

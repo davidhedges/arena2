@@ -61,7 +61,6 @@ namespace Arena.Network
         internal static bool TryValidate(
             HubMatchStatusSnapshot status,
             string hubServerUri,
-            long nowMicros,
             out ValidatedMatchAssignment assignment,
             out string error)
         {
@@ -129,10 +128,13 @@ namespace Arena.Network
                 return false;
             }
 
+            // Both timestamps originate at the Hub. Do not compare a server
+            // deadline to this PC's UTC clock (or a previous match's estimate).
+            // Actual expiry is enforced by Hub maintenance and match admission.
             if (!status.AssignmentExpiresAtMicros.HasValue
-                || status.AssignmentExpiresAtMicros.Value <= nowMicros)
+                || status.AssignmentExpiresAtMicros.Value <= status.UpdatedAtMicros)
             {
-                error = "The match assignment expired before the client could join.";
+                error = "The Hub returned an invalid match assignment deadline.";
                 return false;
             }
 
@@ -570,12 +572,10 @@ namespace Arena.Network
                 return;
             }
 
-            long nowMicros = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
             NetworkEnvironmentEndpoint hubEndpoint = NetworkEnvironmentConfig.CurrentHubEndpoint;
             if (!MatchAssignmentValidator.TryValidate(
                     status,
                     hubEndpoint.ServerUri,
-                    nowMicros,
                     out ValidatedMatchAssignment assignment,
                     out string validationError))
             {
@@ -594,11 +594,7 @@ namespace Arena.Network
             _activeMatchSceneName = assignment.SceneName;
             State = MatchHandoffState.ConnectingToMatch;
             LastError = string.Empty;
-            double assignmentSecondsRemaining =
-                (status.AssignmentExpiresAtMicros!.Value - nowMicros) / 1_000_000d;
-            _deadlineRealtime = Time.unscaledTime + Mathf.Min(
-                MatchConnectTimeoutSeconds,
-                (float)Math.Max(0.1d, assignmentSecondsRemaining));
+            _deadlineRealtime = Time.unscaledTime + MatchConnectTimeoutSeconds;
             MatchStartupTiming.Record("assignment_validated");
             NotifyChanged();
             _match.ConnectToProvisionedMatch(
@@ -747,12 +743,8 @@ namespace Arena.Network
 
         private void Update()
         {
-            HubMatchStatusSnapshot? hubStatus = _hub.MatchStatus;
-            long nowMicros = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
-            bool ticketExpired = hubStatus.HasValue
-                                 && hubStatus.Value.TicketExpiresAtMicros <= nowMicros;
             if (State == MatchHandoffState.WaitingForAssignment
-                && (ticketExpired || Time.unscaledTime >= _deadlineRealtime))
+                && Time.unscaledTime >= _deadlineRealtime)
             {
                 string ticketId = _hub.MatchStatus?.TicketId ?? _activeTicketId ?? string.Empty;
                 RollBackInHub("Match provisioning timed out. Please try again.", ticketId);

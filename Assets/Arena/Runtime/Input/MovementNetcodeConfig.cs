@@ -16,7 +16,7 @@ namespace Arena.Input
         public const int MaxLocalPredictionTicksPerFrame = 5;
         public const int MaxTicksToSendPerFrame = 5;
 
-        // Bounded pending-input history until full rewind/replay replaces this scaffold.
+        // Unacknowledged commands retained for authoritative reconciliation and replay.
         public const int MaxPendingCommands = 96;
 
         // Hard bound on prediction ahead of the last authoritative ack. The
