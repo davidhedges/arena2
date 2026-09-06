@@ -96,7 +96,7 @@ fn write_compact_json(source_path: &Path, output_path: &Path) {
             source_path.display()
         )
     });
-    let parsed_source =
+    let mut parsed_source =
         serde_json::from_slice::<serde_json::Value>(&source).unwrap_or_else(|error| {
             panic!(
                 "shared json {} must be valid: {error}",
@@ -104,7 +104,24 @@ fn write_compact_json(source_path: &Path, output_path: &Path) {
             )
         });
 
-    let compact = strip_json_formatting_whitespace(&source);
+    let compact = if source_path.file_name().and_then(|name| name.to_str())
+        == Some("progression_catalog.shared.json")
+    {
+        // These two fields belong to Unity authoring, not the runtime cue contract.
+        // Keep the existing compiled catalog projection free of ownership prose.
+        // Hashing below still stamps the complete authored source, as before.
+        for cue in parsed_source["combat_vfx_cues"]
+            .as_array_mut()
+            .expect("progression catalog must contain combat_vfx_cues")
+        {
+            let fields = cue.as_object_mut().expect("VFX cue must be an object");
+            fields.remove("authoring_mode");
+            fields.remove("authoring_reason");
+        }
+        serde_json::to_vec(&parsed_source).expect("runtime progression catalog must serialize")
+    } else {
+        strip_json_formatting_whitespace(&source)
+    };
     let parsed_compact =
         serde_json::from_slice::<serde_json::Value>(&compact).unwrap_or_else(|error| {
             panic!(

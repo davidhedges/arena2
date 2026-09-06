@@ -44,38 +44,60 @@ do not hand-edit it to repair identity drift.
 
 ### VFX cue ownership
 
-`combat_vfx_cues` in progression is the runtime cue authority. School palettes
-and per-spell slot overrides supply editor generation inputs; editing those
-assets does not automatically replace runtime cue rows.
+`combat_vfx_cues` in progression is the runtime cue authority. Each row now
+explicitly declares its authoring source with `authoring_mode`:
 
-| Concept | Owner and rule |
+| Mode | Owner and rule |
 | --- | --- |
-| Cue structure | `SpellVfxGenerator` derives triggers, roles, attachment, and lifetime policy from gameplay and animation facts. Rust `vfx_generation.rs` validates field relationships; it does not generate another catalog. |
-| Slot look | `SchoolVfxSet` supplies the school default; `SpellVfxOverrideCatalog` supplies explicit per-ability slot exceptions. VFX palette school is presentation metadata, separate from a selected build School. |
-| Cast hand | Resolved animation origin, mirroring, then gesture/clip inference. There is no separate VFX override; missing presentation retains the existing left-hand default. |
-| Prefab and scale | Runtime `CombatVFXRegistry` owns the live ID-to-prefab binding and scale. Palette prefab/scale fields document or validate that mapping. |
-| Authored runtime cue | Progression owns the effective cue fields until a reviewed editor write materializes the agreed generated rows. An explicit `slot` identifies a row; it is not a generated/manual ownership flag. |
-| Manual and legacy exceptions | Changed, catalog-only, or ambiguous slots require manual reconciliation. The generator's writer targets `ABILITY` owners only and preserves other owner kinds, even when their IDs match. |
+| `GENERATED` | Gameplay/animation facts plus school palettes and per-spell slot looks own the generated fields. The catalog row is checked materialized output. Every global row must reproduce across GLOBAL and every equipped animation profile. |
+| `MANUAL` | The catalog owns the effective fields directly. `authoring_reason` explains the exception. Generation comparisons are informational and cannot overwrite it. |
+| `LEGACY` | A non-ABILITY compatibility cue remains authored in the catalog, with an explicit reason. It is excluded from generator slot matching and preserved by writes. |
 
-The generated-cue panel compares candidate output with the loaded catalog.
-Its write button permits matching rows and additional generated slots only
-when the existing inference/diff guards pass. Existing rows retain their
-`sort_order` and unrelated fields; unmatched authored rows are not deleted.
-The file writer rejects a catalog that changed since the preview was loaded.
-Reload and review the new comparison before writing again. This stale-preview
-check is not a general file locking mechanism.
+The current 179 cues comprise **50 generated, 128 manual, and one legacy** row.
+The 166 explicit `slot` keys identify rows; they do not confer ownership.
+Generated rows require an explicit valid slot, unambiguous ABILITY ownership,
+and a resolvable runtime VFX template. Extra runtime conditions outside the
+generator's field contract require manual ownership.
 
-CharacterFx variants use the same normalized slot identity on generated and
-explicit keys: `Body Rings` becomes `character_fx/body_rings`. Multiple
-CharacterFx entries require distinct variant IDs. The current catalog has
-166 explicit slot keys among 179 cues; that count does not establish which
-rows are safe to regenerate automatically.
+`SpellVfxGenerator` derives triggers, roles, attachment, and lifetime from
+gameplay and animation facts. Rust `vfx_generation.rs` validates runtime field
+relationships; it does not generate a competing catalog. `SchoolVfxSet` owns
+school-default slot looks, and `SpellVfxOverrideCatalog` owns explicit per-ability
+look exceptions. VFX palette school remains separate from a selected build School.
 
-The remaining `SPELL`-owned Ice Spikes cue is compatibility data. Its
-`ABILITY` counterpart suppresses it when ability identity is present, but
-an empty-ability fact still needs the fallback. Keep it until all relevant
-event and prediction paths are proven to carry the ability ID. Do not infer
-that the duplicate row renders the effect twice.
+Cast hand is inferred from resolved animation origin, mirroring, then gesture
+or clip inference, retaining the existing left-hand default when presentation
+is missing. The editor's selected profile affects preview only. A candidate that
+varies by equipment cannot overwrite a global generated row; affected existing
+cues retain their authored anchors under manual ownership.
+
+`CombatVFXRegistry` owns live prefab bindings and scales. Palette/override assets
+no longer serialize those fields: their inspector displays resolved values
+read-only. Existing scripted templates retain their own implementation and are
+shown as scripted effects rather than missing prefab bindings.
+
+The editor's regeneration button targets declared GENERATED rows only. The file
+writer reloads inputs, validates every animation context, checks the requested
+rows against fresh generation, and rejects stale catalog previews. Manual and
+legacy rows, ordering, and unrelated fields are preserved. This check is not a
+general file locking mechanism. New generated-only slots remain proposals:
+stage explicit ownership in the catalog before materializing them. Manual spell
+drafts include ownership and reason fields.
+
+`authoring_mode` and `authoring_reason` are editor metadata. The existing
+`server/build.rs` compiled progression export strips exactly these two cue
+fields, preserving every other parsed value and array order. Source hashes still
+cover the complete authored JSON. No SpacetimeDB table or generated C# wire field
+is added for ownership metadata.
+
+CharacterFx variants share normalized slot identity on generated and explicit
+keys: `Body Rings` becomes `character_fx/body_rings`. Multiple entries require
+distinct variant IDs.
+
+The remaining SPELL-owned Ice Spikes cue is required compatibility data. Its
+ABILITY counterpart suppresses it when ability identity is present; an
+empty-ability fact still needs the fallback. Keep it until all relevant event
+and prediction paths are proven to carry the ability ID.
 
 ### Build taxonomy
 

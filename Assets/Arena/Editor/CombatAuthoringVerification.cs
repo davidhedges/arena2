@@ -28,8 +28,26 @@ namespace Arena.Editor
             public List<string> selectableMeleeErrors = new();
             public int generatedVfxCuesChecked;
             public List<string> vfxOwnershipErrors = new();
+            public List<CueOwnershipRow> cueOwnership = new();
+            public List<VfxBindingRow> vfxBindings = new();
+            public List<string> unresolvedVfxIds = new();
             public List<MeleeRow> melee = new();
             public List<VfxRow> vfx = new();
+        }
+
+        [Serializable]
+        internal sealed class CueOwnershipRow
+        {
+            public string ownerKind = "", ownerId = "", slot = "", mode = "", reason = "", vfxId = "";
+            public int sortOrder;
+        }
+
+        [Serializable]
+        internal sealed class VfxBindingRow
+        {
+            public string vfxId = "", source = "", prefabGuid = "";
+            public long prefabFileId;
+            public float scale;
         }
 
         [Serializable]
@@ -141,10 +159,15 @@ namespace Arena.Editor
             {
                 window.CaptureVfxInventory(report);
                 report.vfxOwnershipErrors = window.CheckGeneratedCueOwnership(out report.generatedVfxCuesChecked);
+                window.CaptureVfxOwnership(report);
             }
             catch (Exception error) { report.inventoryErrors.Add("VFX inventory: " + error); }
             finally { UnityEngine.Object.DestroyImmediate(window); }
             File.WriteAllText(Path.Combine(output, "inventory.json"), JsonUtility.ToJson(report, true));
+            if (report.unresolvedVfxIds.Count > 0)
+                Debug.LogWarning("[CombatAuthoringVerification] Unresolved runtime VFX templates: "
+                    + string.Join(", ", report.unresolvedVfxIds) + ". See cue ownership/reasons in the inventory. "
+                    + "Unresolved generated-owned templates fail the ownership check.");
             string summary = $"[CombatAuthoringVerification] Tests {report.testsPassed} passed / {report.testsFailed} failed; "
                 + $"{report.selectableMeleeAbilitiesChecked} selectable melee abilities checked, "
                 + $"{report.selectableMeleeErrors.Count} timing errors; {report.melee.Count} melee attacks, "

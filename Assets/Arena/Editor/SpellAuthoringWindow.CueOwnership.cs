@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Arena.Presentation;
+using UnityEditor;
 using UnityEngine;
 
 namespace Arena.Editor
@@ -137,6 +138,38 @@ namespace Arena.Editor
                         .Select(diff => abilityId + "/" + row.Slot + ": preview is stale or differs from current global generation (" + diff + ")."));
             }
             return errors;
+        }
+
+        internal void CaptureVfxOwnership(CombatAuthoringVerification.Report report)
+        {
+            if (_catalog == null) Load();
+            foreach (var cue in _catalog!.combat_vfx_cues)
+                report.cueOwnership.Add(new CombatAuthoringVerification.CueOwnershipRow
+                {
+                    ownerKind = cue.owner_kind, ownerId = cue.owner_id, slot = cue.slot, mode = cue.authoring_mode,
+                    reason = cue.authoring_reason, vfxId = cue.vfx_id, sortOrder = cue.sort_order,
+                });
+            foreach (string id in _catalog.combat_vfx_cues.Select(c => Normalize(c.vfx_id)).Distinct().OrderBy(id => id, StringComparer.Ordinal))
+            {
+                var binding = new CombatAuthoringVerification.VfxBindingRow { vfxId = id };
+                if (CombatVFXTemplateRegistry.IsScriptedTemplate(id)) binding.source = "SCRIPTED";
+                else
+                {
+                    var template = CombatVFXTemplateRegistry.ResolveTemplate(id);
+                    if (template?.Prefab != null)
+                    {
+                        binding.source = "REGISTRY";
+                        binding.scale = template.Scale;
+                        AssetDatabase.TryGetGUIDAndLocalFileIdentifier(template.Prefab, out binding.prefabGuid, out binding.prefabFileId);
+                    }
+                    else
+                    {
+                        binding.source = "UNRESOLVED";
+                        report.unresolvedVfxIds.Add(id);
+                    }
+                }
+                report.vfxBindings.Add(binding);
+            }
         }
     }
 }

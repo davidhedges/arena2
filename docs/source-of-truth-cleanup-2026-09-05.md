@@ -7,7 +7,7 @@ Ice Spikes compatibility cue after demonstrating why its removal is unsafe
 for empty-ability facts. Further migrations listed below require a separate
 scope decision.
 
-Latest result: the approved melee cleanup below corrected five selectable
+The completed melee cleanup below corrected five selectable
 timing mismatches, refreshed 34 mirrors and 12 trim fields, and added a check
 that now passes for all 58 selectable melee abilities. The rebuilt local match
 is `sha256-14a507e5ecb72384f8eb`; native Unity Hub-to-match-to-Hub validation
@@ -438,6 +438,99 @@ outside direct selectable roots, five eventless entries, nine unexported Staff
 strikes, and the VFX/identity decisions described below. None was expanded into
 this batch.
 
+
+## Approved VFX ownership batch
+
+The user approved five sequential items: consolidate prefab/scale authoring,
+declare every existing cue's ownership, migrate reproducible slots, enforce
+editor ownership across animation contexts, and validate locally with preserved
+runtime effects and saved Hub data. This batch does not authorize melee timing
+changes, ability-cost migration, or removal of the Ice Spikes identity fallback.
+
+| Item | Result | Local commit |
+| --- | --- | --- |
+| Registry ownership | Removed 116 serialized prefab/scale fields across seven school palettes and the override catalog. Inspectors show runtime bindings read-only, including scripted-template handling. All 660 native candidate rows and 93 runtime binding records are unchanged. | `60d5c905` |
+| Cue ownership | Declared authoring ownership on all 179 existing cues, with reasons for manual and legacy entries. No pre-existing JSON field changed. | `d6229a71` |
+| Generated materialization | Promoted 50 existing slots that reproduce exactly across GLOBAL and all five equipped profiles. Native materialization is byte-identical; the new drift guard also requires every catalog Discipline's animation context. | `23a3ebaa` |
+| Editor enforcement | File writes require declared GENERATED ownership and fresh candidates that agree in all contexts. Manual/legacy overwrites, wrong slots, stale/forged previews, ambiguous candidates, missing contexts, and implicit insertions are rejected. | `6711822b` |
+| Final validation | Native ownership/binding inventory and release verification are recorded below. | This handoff's commit |
+
+The final ownership split is **50 GENERATED, 128 MANUAL, one LEGACY**. Manual
+reasons distinguish absent generation inputs, unassigned slots, authored field
+exceptions, profile-dependent generation, and the Ice Spikes identity prerequisite.
+The SPELL fallback no longer competes in editor slot matching; runtime cue
+resolution is unchanged. Regeneration materializes declared output only; new
+slots require explicit ownership before file writing.
+
+The normal Editor inventory now records every cue's owner/mode/reason and every
+referenced VFX ID's registry/scripted binding. **Two runtime templates were already
+unresolved in the native baseline**: `VFX_CLEANSE_HOLY_01` (Cleansing Touch and
+Martyr) and `VFX_EARTHQUAKE_GROUND_01` (Earthquake). Those three cues remain manual
+and retain the baseline finding in their reasons. The inventory reports both
+unresolved IDs; generated-owned unresolved templates fail the ownership check.
+No prefab replacement was made to hide these pre-existing findings.
+
+The first rebuild exceeded the existing 3,500,000-byte PvP ceiling by 3,480 bytes
+because it embedded the new authoring metadata. The existing `server/build.rs`
+compiled progression projection now removes exactly `authoring_mode` and
+`authoring_reason` from cue rows. A regression compares its entire parsed value
+against authored JSON with only those fields removed. Source hashes still cover
+the complete authoring JSON. The final match WASM is **3,485,024 bytes**; the size
+ceiling and runtime/wire cue schemas are unchanged.
+
+Evidence directory: `/private/tmp/arena2-vfx-ownership.XHzZki`.
+Baseline: 822 server, 25 Hub, 55 focused native tests. Final source-of-truth gate:
+**823 server, 25 Hub, 19 Python, eight Ruby tests / 14 assertions**, with all 38
+JSON mirrors and 329 NPC references valid. Final native verification: **96
+passing cases**, all 58 selectable melee roots matching, 50 generated cues
+checked, and zero VFX ownership errors. All 660 generated candidate rows and
+93 binding records remain identical to the baseline.
+
+The skill's standalone loadout guard still targets the retired v1 table. This
+batch used the equivalent read-only v2 table snapshot and comparison, including
+active and dormant choices, equipment configurations, traits, armor, and all
+four Hub catalogs. The canonical rebuild preserved every saved row for all **64
+original profiles**. The anonymous handoff benchmark passes and reaches CLEANED;
+it added one profile. The final snapshot has 65 profiles, with every original
+saved row and all four catalogs unchanged.
+
+Normal Unity Play Mode verifies Hub → local disposable match → Hub using the
+existing player identity and saved revision-10 Daggers build. The same 18
+features, two Specializations, Hunter armor, and two equipped dagger prefabs
+reach the match. Every one of the **179 live `CombatVfxCueCatalog` rows** exactly
+matches the baseline runtime projection, including keys, conditions, attachment,
+lifetime, scale, duration, and order. Regenerated C# bindings have no diff.
+
+Six presentation probes use the live catalog, real resolver, dispatcher, prefab
+registry, and lifecycle registry: Fireball impact, manual Penance impact,
+generated Necrotic Aura, scripted Instant Beam, and Ice Spikes both with ability
+identity and through its retained SPELL fallback. Each resolves and spawns
+exactly one effect, has active renderers with supported materials, and cleans up
+through its duration or radial-effect termination path. Screenshots are retained
+alongside `vfx-playmode.json`; `unity-client.json`, `live-vfx-catalog.json`,
+`final-preservation-proof.txt`, and `unity-cleanup.json` record the client,
+catalog, preservation, and disposable cleanup checks. These are synthetic
+presentation facts in a real match, not a claim that every spell's gameplay cast
+path was exercised. The saved build was not changed to equip these spells.
+
+The normal Editor run also exposed a scene-teardown exception in unchanged
+`CombatPresentationWarmup.WarmAnimationClips`: its catch logger reads the name
+of an unloaded clip. Hub return and disposable cleanup still complete. This
+batch does not repair that separate lifetime issue. Fireball's non-emitting
+container also has an existing unused missing material reference; the probe
+checks the materials of renderers actually drawing the effect. No prefab,
+material, animation, or gameplay asset was changed for verification.
+
+All temporary Editor probes are archived in the evidence directory and removed
+from Assets after verification. The canonical local setup remains ready with
+the managed provisioner running. No Unity Editor batch-mode run was used.
+
+Latest rebuilt match: `sha256-710cf48e8f5795cf17a0`.
+Source fingerprint:
+`3a9cd5a07472d3212622bca16ae9b457000fd02c9bda224dbd655585a0aa3637`.
+WASM SHA-256:
+`710cf48e8f5795cf17a0b2737d54738718fad2fc7bdeed05672a8591160d8dbd`.
+
 ## Remaining work
 
 ### Ice Spikes identity prerequisite
@@ -469,20 +562,14 @@ entries and their effective timings. Any migration still needs a per-clip
 contact/release decision and verification of every sharing attack. No clip
 stamping or fallback removal was performed.
 
-### VFX generation remains an explicit authoring operation
+### VFX generation after explicit ownership migration
 
-The writer now respects ABILITY owner boundaries and rejects stale catalog
-previews. It preserves manual/legacy rows and existing fields, but the catalog
-is not globally generated output. Its 166 explicit slot keys identify rows;
-they do not declare 166 automatically generated rows.
-
-A future migration must identify which cue slots are reproducible from
-palettes, overrides, gameplay, and animation metadata, and which remain
-intentional manual exceptions. Preserve effective prefab, trigger, anchor,
-attachment, lifetime, and ordering for each migrated slot and verify visuals
-before widening that scope. The registry's prefab/scale authority also remains
-separate from palette documentation fields. No blanket regeneration or
-registry migration was done.
+The approved VFX batch above establishes checked generated ownership for 50
+slots and explicit manual/legacy ownership for the rest. Remaining generation
+coverage should be widened only after preserving the intended effect and resolving
+profile-dependent candidates or missing inputs. Palette prefab/scale duplication
+is removed. Two pre-existing unresolved runtime template IDs remain documented
+above; this migration did not select replacement effects for them.
 
 ## Other boundaries still worth tracking
 

@@ -1162,13 +1162,6 @@ struct ActionPresentationDefinition {
 struct CombatVfxCueDefinition {
     owner_kind: String,
     owner_id: String,
-    // Editor ownership only; never projected to CombatVfxCueCatalog or used in gameplay.
-    #[serde(default)]
-    #[allow(dead_code)]
-    authoring_mode: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    authoring_reason: String,
     // Author-time slot key (design doc §3.4), written to the JSON by the Unity generator/writer
     // (SpellCueCatalogWriter) so per-slot overrides and legacy-cue replacement can key on a stable
     // slot identity. It is deliberately NOT synced to the runtime CombatVfxCueCatalog table
@@ -9405,6 +9398,25 @@ mod tests {
     #[test]
     fn progression_catalog_runtime_validation_accepts_current_authoring() {
         super::validate_ability_catalog();
+    }
+
+    #[test]
+    fn compiled_progression_removes_only_vfx_authoring_ownership() {
+        let mut authored: serde_json::Value =
+            serde_json::from_str(include_str!("progression_catalog.shared.json")).unwrap();
+        let runtime: serde_json::Value =
+            serde_json::from_str(super::PROGRESSION_CATALOG_JSON).unwrap();
+        let cues = authored["combat_vfx_cues"].as_array_mut().unwrap();
+        assert!(!cues.is_empty());
+        for cue in cues {
+            let fields = cue.as_object_mut().unwrap();
+            assert!(fields.remove("authoring_mode").is_some());
+            fields.remove("authoring_reason");
+        }
+        assert_eq!(
+            runtime, authored,
+            "runtime projection must preserve every other field and array order"
+        );
     }
 
     #[test]

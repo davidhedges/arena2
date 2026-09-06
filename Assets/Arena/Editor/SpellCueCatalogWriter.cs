@@ -8,18 +8,9 @@ using System.Text;
 namespace Arena.Editor
 {
     /// <summary>
-    /// One materialised <c>combat_vfx_cues</c> row the writer emits — the generator-owned wiring +
-    /// look for a slot, plus the author-time <c>slot</c> key (design doc §3.4) and the
-    /// <see cref="SortOrder"/> it targets. <see cref="SortOrder"/> is the *join key* against the
-    /// existing catalog row: the writer preserves that row's own <c>sort_order</c> (and
-    /// <c>owner_kind</c>/<c>owner_id</c> and any per-slot legacy override keys) verbatim and only
-    /// overwrites the generator-owned fields + inserts <c>slot</c>. That is what makes FIREBALL's
-    /// first write a zero-diff-except-slot change (the generator reproduces every wiring field, so
-    /// only the new <c>slot</c> lines appear in the diff).
-    /// <para>
-    /// <see cref="ProjectileSequenceIndex"/> is <c>null</c> for non-projectile slots (the key is
-    /// omitted / removed) and <c>0</c> for a <c>PROJECTILE_BODY</c> row.
-    /// </para>
+    /// Generated fields for one cue slot. SortOrder identifies the existing ABILITY row; ownership
+    /// metadata, owner identity, ordering, and unrelated fields are preserved during materialization.
+    /// ProjectileSequenceIndex is null when the generated cue has no sequence condition.
     /// </summary>
     public readonly struct SpellCueRow
     {
@@ -47,7 +38,6 @@ namespace Arena.Editor
             SortOrder = sortOrder;
         }
 
-        /// <summary>Author-time slot key (snake_case: <c>cast_glow</c>, <c>projectile_body</c>, ...).</summary>
         public string Slot { get; }
         public string Trigger { get; }
         public string Anchor { get; }
@@ -57,32 +47,21 @@ namespace Arena.Editor
         public string Lifecycle { get; }
         public int? ProjectileSequenceIndex { get; }
         public int DurationMs { get; }
-        /// <summary>The existing row's <c>sort_order</c> this generated row updates (the join key).</summary>
         public int SortOrder { get; }
     }
 
     /// <summary>
-    /// Surgical writer for the <c>combat_vfx_cues[]</c> region of
-    /// <c>server/src/progression_catalog.shared.json</c> (design doc decision 4 / decision 10, the
-    /// "tested JSON writer" slice). Materialises generated cues for a single owner back into the
-    /// catalog while leaving every other byte identical — melee rows, other spells, ability data,
-    /// key order, indentation, and line endings are untouched.
+    /// Materializes declared GENERATED cues in progression_catalog.shared.json. The file-writing
+    /// entry point validates ownership and fresh global generation before calling the surgical
+    /// formatter. Manual/legacy rows and bytes outside the affected owner remain unchanged.
     /// <para>
-    /// It deliberately does <b>not</b> round-trip the file through a JSON de/serialiser: the
-    /// authoring window's models declare only a handful of fields, so reserialising would drop
-    /// <c>damage</c>/<c>impact_effects</c>/all the rich gameplay and reorder keys, destroying the
-    /// 5300-line file. Instead it locates the owner's rows textually and rewrites only those spans,
-    /// parsing each existing row to preserve its <c>sort_order</c> and any legacy override keys and
-    /// merging the generator-owned fields over the top (design doc §3.3/§3.4).
+    /// SpliceOwnerCues is an in-memory formatter, including insertion support for explicit staging;
+    /// it is not permission to write new or profile-dependent runtime content. WriteOwnerCues
+    /// accepts only existing generated-owned rows that match every current animation context.
     /// </para>
     /// <para>
-    /// The new author-time <c>slot</c> key is written to the JSON but is <b>not</b> synced to the
-    /// runtime <c>CombatVfxCueCatalog</c> table (<c>sync_combat_vfx_cue_catalog</c> ignores it) — no
-    /// runtime schema or wire change (design doc §3.4a). Runtime catalog changes require a module
-    /// rebuilt from the edited JSON. For new local Hub-created matches or open-world instances,
-    /// run <c>ops/setup-local-multiplayer.sh setup</c>. Direct-local publishing updates one database;
-    /// see <c>docs/project-structure.md</c>. Calling <c>publish_progression_catalogs</c> against an
-    /// older module only resyncs the catalog already embedded in that module.
+    /// Runtime catalog changes require the canonical data-preserving local setup to rebuild the
+    /// embedded catalog. Resyncing an older module does not publish edited source JSON.
     /// </para>
     /// </summary>
     public static class SpellCueCatalogWriter
@@ -129,6 +108,8 @@ namespace Arena.Editor
                 TryGetString(fields, "authoring_reason", out string reason);
                 TryGetString(fields, "slot", out string slot);
                 string identity = NormalizeOwnerId(kind) + "/" + NormalizeOwnerId(owner);
+                if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(owner))
+                    errors.Add(identity + ": cue owner_kind and owner_id are required.");
                 if (!TryGetInt(fields, "sort_order", out int order))
                     errors.Add(identity + ": missing integer sort_order.");
                 identity += "/" + order;
@@ -142,8 +123,8 @@ namespace Arena.Editor
                     if (!string.IsNullOrWhiteSpace(reason))
                         errors.Add(identity + ": generated cues must not retain a manual exception reason.");
                     foreach (var field in fields)
-                        if (!CanonicalKeyOrder.ContainsKey(field.Key)
-                            && field.Key != "authoring_mode" && field.Key != "authoring_reason"
+                        if ((!CanonicalKeyOrder.ContainsKey(field.Key)
+                            && field.Key != "authoring_mode" && field.Key != "authoring_reason")
                             || field.Key == "hit_index")
                             errors.Add(identity + ": generated cues cannot own unsupported field '" + field.Key + "'.");
                 }
@@ -187,7 +168,9 @@ namespace Arena.Editor
         /// <summary>
         /// Reads <paramref name="catalogPath"/>, splices <paramref name="rows"/> into the ABILITY
         /// owner's rows, and writes the result back. Other owner kinds remain untouched even when
-        /// they share the same owner ID. Returns <c>true</c> if the file content changed.
+        /// they share the same owner ID. Only declared GENERATED rows reproduced from fresh inputs
+        /// in every animation context can be written. Unowned additions must be declared first.
+        /// Returns <c>true</c> if the file content changed.
         /// </summary>
         public static bool WriteOwnerCues(
             string catalogPath, string ownerId, IReadOnlyList<SpellCueRow> rows, string expectedCatalogJson)
