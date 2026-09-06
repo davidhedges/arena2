@@ -1,0 +1,151 @@
+{
+  "executed_migration": false,
+  "source": "Exact six private drafts from the protected local Hub snapshot, using the unmodified authoritative validator/materializer with only include paths relocated.",
+  "builds": [
+    {
+      "added_specializations": [],
+      "changes": [
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 1",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 5,
+      "techniques": 5,
+      "traits": 1
+    },
+    {
+      "added_specializations": [
+        {
+          "slot_index": 2,
+          "specialization_id": "DAGGERS_SHADOW"
+        }
+      ],
+      "changes": [
+        {
+          "ability_id": "DAGGER_SLICE",
+          "from": "DAGGERS_BLADEDANCER",
+          "to": "DAGGERS_EXECUTIONER"
+        },
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [
+        "BLIGHT",
+        "MORTALITY"
+      ],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 2",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 23,
+      "techniques": 18,
+      "traits": 0
+    },
+    {
+      "added_specializations": [],
+      "changes": [
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 3",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 5,
+      "techniques": 5,
+      "traits": 1
+    },
+    {
+      "added_specializations": [],
+      "changes": [
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 4",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 5,
+      "techniques": 5,
+      "traits": 1
+    },
+    {
+      "added_specializations": [],
+      "changes": [
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 5",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 5,
+      "techniques": 5,
+      "traits": 1
+    },
+    {
+      "added_specializations": [],
+      "changes": [
+        {
+          "ability_id": "DAGGER_TEMPLE_STRIKE",
+          "from": "DAGGERS_EXECUTIONER",
+          "to": "DAGGERS_SHADOW"
+        }
+      ],
+      "dormant_specializations": [],
+      "frozen_snapshot_roundtrip_equal": true,
+      "idempotent": true,
+      "label": "Build 6",
+      "perks": 0,
+      "runtime_ability_order_equipment_capacity_mastery_equal": true,
+      "spells": 0,
+      "stale_revision_rejected": true,
+      "stored_features": 5,
+      "techniques": 5,
+      "traits": 1
+    }
+  ],
+  "limits": [
+    "Proposal only: no saved row, credential or runtime materialization was changed.",
+    "Checks cover pure validation/materialization, idempotency, stale revision rejection and frozen snapshot round-trip; no in-place migration, reconnect or migrated Hub-to-match rehearsal has been executed.",
+    "Adding Shadow changes the selected-form list; identical active projections do not authorize that product choice.",
+    "Profile retention is unresolved; a disposable test build may be better deleted than migrated."
+  ]
+}
