@@ -29,9 +29,13 @@ post-special-movement handoff contract on the running module:
 Run against a throwaway DB — disconnect cleanup wipes the probe player, and a
 one-shot `spacetime call` cannot leave per-identity state:
 
-  spacetime publish --delete-data=always --yes -p server smhprobe
-  python3 ops/special-movement-handoff-probe.py --database smhprobe
-  spacetime delete smhprobe
+  ops/setup-local-multiplayer.sh setup
+  probe_db="smhprobe-$(date +%s)"
+  spacetime publish --delete-data=never --yes -s local \
+    --bin-path server/target/wasm32-unknown-unknown/release/arena.opt.wasm "$probe_db"
+  spacetime call -s local "$probe_db" enable_local_direct_mode
+  python3 ops/special-movement-handoff-probe.py --database "$probe_db"
+  spacetime delete --yes -s local "$probe_db"
 
 Requires `pip install websocket-client` (scratch venv is fine).
 """
@@ -40,6 +44,7 @@ import argparse
 import collections
 import json
 import math
+import re
 import subprocess
 import sys
 import threading
@@ -65,6 +70,7 @@ class Probe:
         self.database = database
         self.host = host
         self.request_id = 0
+        self.action_seq = 0
         url = f"ws://{host}/v1/database/{database}/subscribe"
         self.ws = websocket.create_connection(
             url, subprotocols=["v1.json.spacetimedb"], timeout=5
@@ -77,6 +83,9 @@ class Probe:
             if isinstance(identity, dict):
                 identity = identity.get("__identity__", "")
             self.identity = (identity or "").removeprefix("0x").lower()
+        if not self.identity or not re.fullmatch(r"[0-9a-f]{64}", self.identity):
+            self.ws.close()
+            raise RuntimeError("probe did not receive a valid authenticated identity")
         # Drain server frames forever — recv must stay live so the library
         # answers server pings, or the server drops the connection (and
         # disconnect cleanup deletes the probe player).
@@ -119,7 +128,7 @@ class Probe:
 
     def sql(self, query):
         result = subprocess.run(
-            ["spacetime", "sql", self.database, query],
+            ["spacetime", "sql", "--server", f"http://{self.host}", self.database, query],
             capture_output=True,
             text=True,
         )
@@ -183,6 +192,8 @@ class Probe:
 
     def start_dodge(self, physics, forward, strafe):
         pos_x, pos_y, pos_z = physics["pos"]
+        self.action_seq += 1
+        predicted_action_id = f"smh-probe-dodge-{self.action_seq}"
         self.call(
             "start_dodge",
             [
@@ -194,10 +205,34 @@ class Probe:
                 physics["yaw"],
                 forward,
                 strafe,
-                "",
-                0,
+                predicted_action_id,
+                self.action_seq,
             ],
         )
+        return predicted_action_id, self.action_seq
+
+    def prediction_result(self, predicted_action_id, action_seq):
+        rows = self.sql(
+            "SELECT owner, predicted_action_id, client_action_seq, family, result "
+            "FROM predicted_action_result"
+        )
+        for owner, token, sequence, family, result in rows:
+            if (
+                owner.removeprefix("0x").lower() == self.identity
+                and token == predicted_action_id
+                and int(sequence) == action_seq
+                and enum_tag(family) == "movement"
+            ):
+                return enum_tag(result)
+        return None
+
+
+def enum_tag(cell):
+    """Decode the CLI's `(accepted = ())` enum representation."""
+    cell = cell.strip().lower()
+    if cell.startswith("(") and "=" in cell:
+        return cell[1:].split("=", 1)[0].strip()
+    return cell
 
 
 def check(name, ok, detail):
@@ -284,7 +319,7 @@ def main():
             print(f"    reducer failure: {failure}")
         return 1
 
-    probe.start_dodge(physics, forward=1.0, strafe=0.0)
+    predicted_action_id, action_seq = probe.start_dodge(physics, forward=1.0, strafe=0.0)
 
     runtime = wait_for_runtime(probe, present=True)
     if runtime is None:
@@ -322,7 +357,17 @@ def main():
     )
 
     print(f"streamed intent before dash: forward={before['forward']:.3f} strafe={before['strafe']:.3f}")
-    ok = True
+    result = probe.prediction_result(predicted_action_id, action_seq)
+    if result is None:
+        print("  prediction rows:", probe.sql(
+            "SELECT owner, predicted_action_id, client_action_seq, family, result "
+            "FROM predicted_action_result"
+        ))
+    ok = check(
+        "prediction-accepted",
+        result == "accepted",
+        f"matching movement result for token={predicted_action_id} seq={action_seq}: {result}",
+    )
     ok &= check(
         "handoff-axes",
         handoff["forward"] == 0.0 and handoff["strafe"] == 0.0,
@@ -330,7 +375,8 @@ def main():
     )
     ok &= check(
         "handoff-still",
-        speed <= STILL_TOLERANCE_METERS_PER_SECOND
+        ticked > 0
+        and speed <= STILL_TOLERANCE_METERS_PER_SECOND
         and drift <= STILL_TOLERANCE_METERS,
         f"max speed={speed:.4f}m/s, max drift={drift:.4f}m over"
         f" {SETTLE_SECONDS:.1f}s with no commands sent"
