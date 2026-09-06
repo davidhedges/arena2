@@ -87,7 +87,51 @@ namespace Arena.Editor
     /// </summary>
     public static class SpellCueCatalogWriter
     {
+        public const string Generated = "GENERATED";
+        public const string Manual = "MANUAL";
+        public const string Legacy = "LEGACY";
         private const string CombatVfxCuesKey = "\"combat_vfx_cues\"";
+
+        /// <summary>Checks authoring metadata without changing or projecting runtime cue fields.</summary>
+        public static List<string> ValidateOwnership(string catalogJson)
+        {
+            var errors = new List<string>();
+            if (!TryFindCombatVfxCuesArray(catalogJson, out int open, out int close))
+                throw new InvalidOperationException("combat_vfx_cues array not found in catalog JSON.");
+            string body = catalogJson.Substring(open + 1, close - open - 1);
+            var identities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var span in TokenizeObjectSpans(body))
+            {
+                var fields = ParseFlatObject(body.Substring(span.Start, span.End - span.Start), out _, out _);
+                TryGetString(fields, "owner_kind", out string kind);
+                TryGetString(fields, "owner_id", out string owner);
+                TryGetString(fields, "authoring_mode", out string mode);
+                TryGetString(fields, "authoring_reason", out string reason);
+                TryGetString(fields, "slot", out string slot);
+                string identity = NormalizeOwnerId(kind) + "/" + NormalizeOwnerId(owner);
+                if (!TryGetInt(fields, "sort_order", out int order))
+                    errors.Add(identity + ": missing integer sort_order.");
+                identity += "/" + order;
+                if (!identities.Add(identity)) errors.Add(identity + ": duplicate cue identity.");
+                if (mode != Generated && mode != Manual && mode != Legacy)
+                    errors.Add(identity + ": authoring_mode must be GENERATED, MANUAL, or LEGACY.");
+                else if (mode == Generated)
+                {
+                    if (NormalizeOwnerId(kind) != "ABILITY" || string.IsNullOrWhiteSpace(slot))
+                        errors.Add(identity + ": generated cues require an ABILITY owner and an explicit slot.");
+                    if (!string.IsNullOrWhiteSpace(reason))
+                        errors.Add(identity + ": generated cues must not retain a manual exception reason.");
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(reason))
+                        errors.Add(identity + ": manual and legacy cues require an authoring_reason.");
+                    if (mode == Legacy && NormalizeOwnerId(kind) == "ABILITY")
+                        errors.Add(identity + ": legacy compatibility cues require a non-ABILITY owner.");
+                }
+            }
+            return errors;
+        }
 
         // Canonical key order for a re-serialised row. `slot` (the new author-time key) sits right
         // after `owner_id`, which is the placement that keeps FIREBALL's first write a pure insertion

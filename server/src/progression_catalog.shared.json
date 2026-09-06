@@ -15784,7 +15784,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 8
+      "sort_order": 8,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15797,7 +15799,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 9
+      "sort_order": 9,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15810,7 +15814,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 10
+      "sort_order": 10,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15823,7 +15829,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 11
+      "sort_order": 11,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15834,7 +15842,9 @@
       "vfx_id": "VFX_FIRE_AREA_BURST_01_ARENA",
       "attach_mode": "SPAWN_WORLD",
       "duration_ms": 2500,
-      "sort_order": 10
+      "sort_order": 10,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -15845,7 +15855,9 @@
       "vfx_id": "VFX_LIGHT_BURST_01_ARENA",
       "attach_mode": "SPAWN_WORLD",
       "duration_ms": 2500,
-      "sort_order": 11
+      "sort_order": 11,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -15858,7 +15870,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 12
+      "sort_order": 12,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -15870,7 +15884,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 13
+      "sort_order": 13,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue. Runtime template was unresolved in the migration baseline."
     },
     {
       "owner_kind": "ABILITY",
@@ -15883,7 +15899,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 5000,
-      "sort_order": 14
+      "sort_order": 14,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15896,7 +15914,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 14
+      "sort_order": 14,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -15910,7 +15930,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 15
+      "sort_order": 15,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -15923,7 +15945,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 20
+      "sort_order": 20,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -15936,7 +15960,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 16
+      "sort_order": 16,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -15949,7 +15975,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 2500,
-      "sort_order": 17
+      "sort_order": 17,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15962,7 +15990,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 2500,
-      "sort_order": 18
+      "sort_order": 18,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15976,7 +16006,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 19
+      "sort_order": 19,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -15986,7 +16018,9 @@
       "vfx_id": "VFX_EARTHSHATTER_FIRE_AREA_01",
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
-      "sort_order": 20
+      "sort_order": 20,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -15996,7 +16030,9 @@
       "vfx_id": "VFX_ICE_SPIKES_AREA_01",
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
-      "sort_order": 30
+      "sort_order": 30,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Ability-owned counterpart to the retained SPELL compatibility cue; reconcile identity before generation."
     },
     {
       "owner_kind": "SPELL",
@@ -16006,7 +16042,9 @@
       "vfx_id": "VFX_ICE_SPIKES_AREA_01",
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
-      "sort_order": 31
+      "sort_order": 31,
+      "authoring_mode": "LEGACY",
+      "authoring_reason": "Required fallback when ability identity is absent."
     },
     {
       "owner_kind": "ABILITY",
@@ -16019,7 +16057,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 350,
-      "sort_order": 100
+      "sort_order": 100,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16033,7 +16073,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 110
+      "sort_order": 110,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16046,7 +16088,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 120
+      "sort_order": 120,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16059,7 +16103,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 121
+      "sort_order": 121,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored anchor differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16073,7 +16119,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 122
+      "sort_order": 122,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored anchor differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16086,7 +16134,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 300,
-      "sort_order": 130
+      "sort_order": 130,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored anchor differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16100,7 +16150,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 131
+      "sort_order": 131,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16113,7 +16165,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 132
+      "sort_order": 132,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16126,7 +16180,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 125
+      "sort_order": 125,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16139,7 +16195,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 130
+      "sort_order": 130,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16153,7 +16211,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 140
+      "sort_order": 140,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16166,7 +16226,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 150
+      "sort_order": 150,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16179,7 +16241,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 350,
-      "sort_order": 151
+      "sort_order": 151,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16193,7 +16257,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 152
+      "sort_order": 152,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16206,7 +16272,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 153
+      "sort_order": 153,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored vfx_id, duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16219,7 +16287,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 350,
-      "sort_order": 154
+      "sort_order": 154,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16233,7 +16303,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 155
+      "sort_order": 155,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16246,7 +16318,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 156
+      "sort_order": 156,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16259,7 +16333,9 @@
       "vfx_role": "TRAVEL_BODY",
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "duration_ms": 0,
-      "sort_order": 168
+      "sort_order": 168,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16272,7 +16348,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 170
+      "sort_order": 170,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16285,7 +16363,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 180
+      "sort_order": 180,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16298,7 +16378,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 181
+      "sort_order": 181,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16311,7 +16393,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 182
+      "sort_order": 182,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16324,7 +16408,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1200,
-      "sort_order": 175
+      "sort_order": 175,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16337,7 +16423,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 176
+      "sort_order": 176,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16350,7 +16438,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 179
+      "sort_order": 179,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16363,7 +16453,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 153
+      "sort_order": 153,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16377,7 +16469,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 177
+      "sort_order": 177,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16390,7 +16484,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 153
+      "sort_order": 153,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16404,7 +16500,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 178
+      "sort_order": 178,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored anchor differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16417,7 +16515,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 180
+      "sort_order": 180,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16429,7 +16529,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 182
+      "sort_order": 182,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16442,7 +16544,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 183
+      "sort_order": 183,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16455,7 +16559,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 184
+      "sort_order": 184,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16468,7 +16574,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 500,
-      "sort_order": 185
+      "sort_order": 185,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16481,7 +16589,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 186
+      "sort_order": 186,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16494,7 +16604,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 187
+      "sort_order": 187,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16507,7 +16619,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 190
+      "sort_order": 190,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16519,7 +16633,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "duration_ms": 2250,
-      "sort_order": 187
+      "sort_order": 187,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16532,7 +16648,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 193
+      "sort_order": 193,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16545,7 +16663,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 194
+      "sort_order": 194,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16559,7 +16679,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 188
+      "sort_order": 188,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16572,7 +16694,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 189
+      "sort_order": 189,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16585,7 +16709,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 190
+      "sort_order": 190,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16598,7 +16724,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 191
+      "sort_order": 191,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16611,7 +16739,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 192
+      "sort_order": 192,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16624,7 +16754,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 185
+      "sort_order": 185,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16638,7 +16770,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 190
+      "sort_order": 190,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16651,7 +16785,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 200
+      "sort_order": 200,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16664,7 +16800,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
-      "sort_order": 201
+      "sort_order": 201,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16677,7 +16815,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 5000,
-      "sort_order": 202
+      "sort_order": 202,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16689,7 +16829,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 191
+      "sort_order": 191,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16701,7 +16843,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 192
+      "sort_order": 192,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16714,7 +16858,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 192
+      "sort_order": 192,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16727,7 +16873,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 193
+      "sort_order": 193,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored lifecycle, vfx_id, duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16740,7 +16888,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 207
+      "sort_order": 207,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored lifecycle, vfx_id, duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16753,7 +16903,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 208
+      "sort_order": 208,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored lifecycle, vfx_id, duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16766,7 +16918,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 209
+      "sort_order": 209,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16779,7 +16933,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1200,
-      "sort_order": 208
+      "sort_order": 208,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16792,7 +16948,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 209
+      "sort_order": 209,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16802,7 +16960,9 @@
       "vfx_id": "VFX_FROZEN_GRASP_AREA_01",
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
-      "sort_order": 194
+      "sort_order": 194,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -16815,7 +16975,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 350,
-      "sort_order": 195
+      "sort_order": 195,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -16828,7 +16990,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 196
+      "sort_order": 196,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16841,7 +17005,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
       "duration_ms": 5000,
-      "sort_order": 197
+      "sort_order": 197,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16854,7 +17020,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 211
+      "sort_order": 211,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16867,7 +17035,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 212
+      "sort_order": 212,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16880,7 +17050,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 213
+      "sort_order": 213,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16893,7 +17065,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 214
+      "sort_order": 214,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16906,7 +17080,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 215
+      "sort_order": 215,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored vfx_id differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -16919,7 +17095,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 216
+      "sort_order": 216,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16932,7 +17110,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 217
+      "sort_order": 217,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context. Runtime template was unresolved in the migration baseline."
     },
     {
       "owner_kind": "ABILITY",
@@ -16945,7 +17125,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 218
+      "sort_order": 218,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -16958,7 +17140,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 198
+      "sort_order": 198,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16971,7 +17155,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 199
+      "sort_order": 199,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16984,7 +17170,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 200
+      "sort_order": 200,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -16997,7 +17185,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 201
+      "sort_order": 201,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17010,7 +17200,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 202
+      "sort_order": 202,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17023,7 +17215,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 203
+      "sort_order": 203,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17036,7 +17230,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 204
+      "sort_order": 204,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17049,7 +17245,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 205
+      "sort_order": 205,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17062,7 +17260,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 700,
-      "sort_order": 206
+      "sort_order": 206,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17075,7 +17275,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 207
+      "sort_order": 207,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17088,7 +17290,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 208
+      "sort_order": 208,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17100,7 +17304,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 2000,
-      "sort_order": 200
+      "sort_order": 200,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "No explicit generator slot; preserve authored runtime cue."
     },
     {
       "owner_kind": "ABILITY",
@@ -17113,7 +17319,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 201
+      "sort_order": 201,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17126,7 +17334,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 327
+      "sort_order": 327,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored lifecycle, duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -17139,7 +17349,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 328
+      "sort_order": 328,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17153,7 +17365,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 329
+      "sort_order": 329,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generated fields depend on equipped presentation; global cue retains its authored values."
     },
     {
       "owner_kind": "ABILITY",
@@ -17166,7 +17380,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 330
+      "sort_order": 330,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17180,7 +17396,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 331
+      "sort_order": 331,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored anchor differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -17193,7 +17411,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 202
+      "sort_order": 202,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17206,7 +17426,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 203
+      "sort_order": 203,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17219,7 +17441,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 332
+      "sort_order": 332,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17232,7 +17456,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 333
+      "sort_order": 333,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17245,7 +17471,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 334
+      "sort_order": 334,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17258,7 +17486,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 335
+      "sort_order": 335,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17271,7 +17501,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 336
+      "sort_order": 336,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17284,7 +17516,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 337
+      "sort_order": 337,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17297,7 +17531,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 338
+      "sort_order": 338,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17310,7 +17546,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 339
+      "sort_order": 339,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17323,7 +17561,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 340
+      "sort_order": 340,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17337,7 +17577,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 341
+      "sort_order": 341,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17350,7 +17592,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 5000,
-      "sort_order": 342
+      "sort_order": 342,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17363,7 +17607,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 343
+      "sort_order": 343,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context. Runtime template was unresolved in the migration baseline."
     },
     {
       "owner_kind": "ABILITY",
@@ -17376,7 +17622,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 203
+      "sort_order": 203,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17390,7 +17638,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 204
+      "sort_order": 204,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17403,7 +17653,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 205
+      "sort_order": 205,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -17416,7 +17668,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 210
+      "sort_order": 210,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17430,7 +17684,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 220
+      "sort_order": 220,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17443,7 +17699,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 230
+      "sort_order": 230,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17456,7 +17714,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 231
+      "sort_order": 231,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17470,7 +17730,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 232
+      "sort_order": 232,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17483,7 +17745,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 233
+      "sort_order": 233,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17496,7 +17760,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 234
+      "sort_order": 234,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17510,7 +17776,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 235
+      "sort_order": 235,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17523,7 +17791,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 236
+      "sort_order": 236,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17536,7 +17806,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 237
+      "sort_order": 237,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -17550,7 +17822,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 238
+      "sort_order": 238,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17563,7 +17837,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 239
+      "sort_order": 239,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored duration_ms differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -17576,7 +17852,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 240
+      "sort_order": 240,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17589,7 +17867,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 250
+      "sort_order": 250,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17603,7 +17883,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 260
+      "sort_order": 260,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17616,7 +17898,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 270
+      "sort_order": 270,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17629,7 +17913,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 280
+      "sort_order": 280,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17642,7 +17928,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 285
+      "sort_order": 285,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17655,7 +17943,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 290
+      "sort_order": 290,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17668,7 +17958,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 295
+      "sort_order": 295,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17681,7 +17973,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 300
+      "sort_order": 300,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17694,7 +17988,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 301
+      "sort_order": 301,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17708,7 +18004,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 302
+      "sort_order": 302,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17721,7 +18019,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 303
+      "sort_order": 303,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17734,7 +18034,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 304
+      "sort_order": 304,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17748,7 +18050,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 305
+      "sort_order": 305,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17761,7 +18065,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 306
+      "sort_order": 306,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17774,7 +18080,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 307
+      "sort_order": 307,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17788,7 +18096,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 308
+      "sort_order": 308,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17801,7 +18111,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 309
+      "sort_order": 309,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17814,7 +18126,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 310
+      "sort_order": 310,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17828,7 +18142,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 311
+      "sort_order": 311,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17841,7 +18157,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 312
+      "sort_order": 312,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17854,7 +18172,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 313
+      "sort_order": 313,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17868,7 +18188,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 314
+      "sort_order": 314,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17881,7 +18203,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 315
+      "sort_order": 315,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17894,7 +18218,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 316
+      "sort_order": 316,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17908,7 +18234,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 317
+      "sort_order": 317,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17921,7 +18249,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 318
+      "sort_order": 318,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17934,7 +18264,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 319
+      "sort_order": 319,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17948,7 +18280,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 320
+      "sort_order": 320,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17961,7 +18295,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 321
+      "sort_order": 321,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -17974,7 +18310,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 322
+      "sort_order": 322,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Authored vfx_id differs from generator output; preserve existing effect."
     },
     {
       "owner_kind": "ABILITY",
@@ -17988,7 +18326,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 323
+      "sort_order": 323,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18001,7 +18341,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 1000,
-      "sort_order": 324
+      "sort_order": 324,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18014,7 +18356,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 325
+      "sort_order": 325,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -18027,7 +18371,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 326
+      "sort_order": 326,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
     },
     {
       "owner_kind": "ABILITY",
@@ -18040,7 +18386,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
-      "sort_order": 327
+      "sort_order": 327,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18053,7 +18401,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
-      "sort_order": 328
+      "sort_order": 328,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18066,7 +18416,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 329
+      "sort_order": 329,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18080,7 +18432,9 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "projectile_sequence_index": 0,
       "duration_ms": 0,
-      "sort_order": 330
+      "sort_order": 330,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18093,7 +18447,9 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 331
+      "sort_order": 331,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     },
     {
       "owner_kind": "ABILITY",
@@ -18106,7 +18462,9 @@
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
-      "sort_order": 332
+      "sort_order": 332,
+      "authoring_mode": "MANUAL",
+      "authoring_reason": "Generator does not supply exactly one candidate in every supported context."
     }
   ],
   "slots": [

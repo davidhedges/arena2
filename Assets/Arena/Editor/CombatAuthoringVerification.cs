@@ -118,6 +118,7 @@ namespace Arena.Editor
                         "Arena.Tests.Editor.SpellVfxGeneratorTests.SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource",
                         "Arena.Tests.Editor.SpellCueCatalogWriterTests",
                         "Arena.Tests.Editor.MeleeAuthoringDriftTests",
+                        "Arena.Tests.Editor.VfxOwnershipTests",
                     },
                 }) { runSynchronously = true });
             }

@@ -1295,6 +1295,8 @@ namespace Arena.Editor
         {
             public string owner_kind = string.Empty;
             public string owner_id = string.Empty;
+            public string authoring_mode = string.Empty;
+            public string authoring_reason = string.Empty;
             public string slot = string.Empty;
             public string trigger = string.Empty;
             public string anchor = string.Empty;
