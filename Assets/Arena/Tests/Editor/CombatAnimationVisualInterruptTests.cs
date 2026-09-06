@@ -183,6 +183,71 @@ namespace Arena.Tests.Editor
                 Condition("FreeFall", AnimatorConditionMode.If));
         }
 
+        [TestCase(false, 30)]
+        [TestCase(false, 60)]
+        [TestCase(false, 120)]
+        [TestCase(true, 30)]
+        [TestCase(true, 60)]
+        [TestCase(true, 120)]
+        public void AnimatorController_GroundContactDuringFallBlendStartsLandingImmediately(bool inCombat, int frameRate)
+        {
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Arena/Resources/CharacterAvatarBases/HumanMale.prefab");
+            Type setType = RuntimeAssembly.GetType("Arena.Presentation.CombatAnimationSet", throwOnError: true)!;
+            var set = AssetDatabase.LoadAssetAtPath(
+                "Assets/Arena/Resources/CombatAnimationSets/TwoHandedSword.asset", setType);
+            var overrides = new AnimatorOverrideController(controller);
+            var rig = UnityEngine.Object.Instantiate(prefab);
+            rig.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                Type binderType = RuntimeAssembly.GetType("Arena.Presentation.CombatAnimationSetBinder", throwOnError: true)!;
+                binderType.GetMethod("Bind")!.Invoke(
+                    Activator.CreateInstance(binderType), new object[] { set, overrides });
+                Animator animator = rig.GetComponentInChildren<Animator>();
+                animator.runtimeAnimatorController = overrides;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.applyRootMotion = false;
+                animator.Rebind();
+                animator.SetBool("InCombat", inCombat);
+                animator.SetBool("Grounded", false);
+                animator.SetBool("FreeFall", true);
+                animator.SetFloat("JumpZ", 1f);
+
+                string start = inCombat ? "JumpStartCombat" : "JumpStart";
+                int airHash = Animator.StringToHash(inCombat ? "InAirCombat" : "InAir");
+                int landHash = Animator.StringToHash(inCombat ? "JumpLandCombat" : "JumpLand");
+                float deltaTime = 1f / frameRate;
+                // A running jump can touch down during the 80 ms blend from
+                // the takeoff clip to the airborne loop. Cross the authored
+                // exit time so this exercises the controller's real transition.
+                animator.Play(start, 0, 0.77f);
+                animator.Update(0f);
+                for (int frame = 0; frame < frameRate && !animator.IsInTransition(0); frame++)
+                    animator.Update(deltaTime);
+
+                Assert.That(animator.IsInTransition(0), Is.True, "Expected the takeoff-to-fall blend.");
+                Assert.That(animator.GetNextAnimatorStateInfo(0).shortNameHash, Is.EqualTo(airHash));
+
+                animator.SetBool("Grounded", true);
+                animator.SetBool("FreeFall", false);
+                animator.Update(deltaTime);
+
+                int activeDestination = animator.IsInTransition(0)
+                    ? animator.GetNextAnimatorStateInfo(0).shortNameHash
+                    : animator.GetCurrentAnimatorStateInfo(0).shortNameHash;
+                Assert.That(activeDestination, Is.EqualTo(landHash),
+                    "Ground contact must begin landing on this frame, without waiting for the fall blend to finish.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(rig);
+                UnityEngine.Object.DestroyImmediate(overrides);
+            }
+        }
+
         [Test]
         public void AnimatorController_DodgeUsesAuthoritativePhaseParameter()
         {
