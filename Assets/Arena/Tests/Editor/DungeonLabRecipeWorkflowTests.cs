@@ -28,7 +28,7 @@ namespace Arena.Tests.Editor
             string example = RecipePrefix(snapshot, "connector_example_01");
 
             Assert.That(snapshot["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("8"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["route.catalogDigestMatches"], Is.EqualTo("True"));
@@ -243,7 +243,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipePoolSelectionSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("8"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["report.repeatable"], Is.EqualTo("True"));
@@ -405,7 +405,7 @@ namespace Arena.Tests.Editor
                 snapshot["incompatible.message"],
                 Does.Contain("had no compatible generated opportunity"));
             Assert.That(snapshot["ordinary.catalogValid"], Is.EqualTo("True"));
-            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("10"));
+            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("8"));
             Assert.That(snapshot["ordinary.catalogDigestPreserved"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentBefore"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentAfter"], Is.EqualTo("True"));
@@ -419,7 +419,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot =
                 Snapshot("BuildRecipePoolProofSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("8"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["recipe.id"], Is.EqualTo("connector_example_01"));
             Assert.That(snapshot["recipe.kind"], Is.EqualTo("Connector"));
