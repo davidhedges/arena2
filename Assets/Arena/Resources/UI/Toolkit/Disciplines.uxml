@@ -82,13 +82,22 @@
             <ui:Button name="PickerScrim" class="picker-scrim" />
             <ui:VisualElement class="picker-panel">
                 <ui:VisualElement class="picker-heading">
-                    <ui:VisualElement picking-mode="Ignore">
-                        <ui:Label name="PickerTitle" class="picker-title" text="SELECT" />
+                    <ui:VisualElement class="picker-heading-copy" picking-mode="Ignore">
+                        <ui:Label name="PickerTitle" class="picker-title" text="Choose your discipline" />
                         <ui:Label name="PickerSubtitle" class="picker-subtitle" />
                     </ui:VisualElement>
-                    <ui:Button name="PickerClose" class="picker-close" text="×" />
+                    <ui:Button name="PickerClose" class="picker-close" text="×" tooltip="Close picker" />
                 </ui:VisualElement>
-                <ui:ScrollView name="PickerOptions" class="picker-options" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
+                <ui:VisualElement class="picker-steps" picking-mode="Ignore">
+                    <ui:Label name="PickerDisciplineStep" class="picker-step is-current" text="01  WEAPON / SPELLCASTING" />
+                    <ui:VisualElement class="picker-step-line" />
+                    <ui:Label name="PickerSpecializationStep" class="picker-step" text="02  FORM / SCHOOL" />
+                </ui:VisualElement>
+                <ui:VisualElement name="PickerOptions" class="picker-options" />
+                <ui:VisualElement class="picker-footer">
+                    <ui:Button name="PickerBack" class="picker-back" text="CANCEL" />
+                    <ui:Label name="PickerHint" class="picker-hint" text="Choose a discipline to explore its forms or schools." picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

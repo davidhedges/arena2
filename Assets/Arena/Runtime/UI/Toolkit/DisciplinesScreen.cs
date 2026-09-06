@@ -29,9 +29,14 @@ namespace Arena.UI
         private ScrollView? _editor;
         private VisualElement? _saveSummary;
         private VisualElement? _picker;
-        private ScrollView? _pickerOptions;
+        private VisualElement? _pickerOptions;
         private Label? _pickerTitle;
         private Label? _pickerSubtitle;
+        private Label? _pickerDisciplineStep;
+        private Label? _pickerSpecializationStep;
+        private Label? _pickerHint;
+        private Button? _pickerBack;
+        private string _pickerDisciplineId = string.Empty;
         private Label? _activeAllocation;
         private Label? _totalAllocation;
         private Label? _disciplineAllocation;
@@ -112,7 +117,7 @@ namespace Arena.UI
                 return false;
             if (_picker?.ClassListContains(OpenClass) == true)
             {
-                ClosePicker();
+                BackInPicker();
                 return true;
             }
             Close();
@@ -132,9 +137,13 @@ namespace Arena.UI
             _editor = _root.Q<ScrollView>("SpecializationEditor");
             _saveSummary = _root.Q<VisualElement>("SaveSummary");
             _picker = _root.Q<VisualElement>("PickerOverlay");
-            _pickerOptions = _root.Q<ScrollView>("PickerOptions");
+            _pickerOptions = _root.Q<VisualElement>("PickerOptions");
             _pickerTitle = _root.Q<Label>("PickerTitle");
             _pickerSubtitle = _root.Q<Label>("PickerSubtitle");
+            _pickerDisciplineStep = _root.Q<Label>("PickerDisciplineStep");
+            _pickerSpecializationStep = _root.Q<Label>("PickerSpecializationStep");
+            _pickerHint = _root.Q<Label>("PickerHint");
+            _pickerBack = _root.Q<Button>("PickerBack");
             _activeAllocation = _root.Q<Label>("ActiveAllocation");
             _totalAllocation = _root.Q<Label>("TotalAllocation");
             _disciplineAllocation = _root.Q<Label>("DisciplineAllocation");
@@ -148,6 +157,7 @@ namespace Arena.UI
             BindButton("NavEquipment", RequestEquipment);
             BindButton("PickerClose", ClosePicker);
             BindButton("PickerScrim", ClosePicker);
+            BindButton("PickerBack", BackInPicker);
             Button? settings = _root.Q<Button>("SettingsButton");
             if (settings != null)
                 settings.clicked += SystemMenuScreen.OpenFromEscape;
@@ -204,13 +214,17 @@ namespace Arena.UI
             if (build == null || contract == null || catalog == null)
             {
                 if (force)
+                {
+                    ClosePicker();
                     _model = null;
+                }
                 Render();
                 return;
             }
             if (!force && _model != null)
                 return;
 
+            ClosePicker();
             _model = new CombatBuildV2EditorModel(build, catalog, contract);
             _loadedRevision = build.Revision;
             _dirty = false;
@@ -582,7 +596,7 @@ namespace Arena.UI
             Label title = new("ADD FORM OR SCHOOL") { pickingMode = PickingMode.Ignore };
             title.AddToClassList("add-discipline-title");
             add.Add(title);
-            Label copy = new("A new path. More possibilities.")
+            Label copy = new("Choose a weapon or spellcasting first.")
             {
                 pickingMode = PickingMode.Ignore,
             };
@@ -595,25 +609,166 @@ namespace Arena.UI
         {
             if (_model == null || _pickerOptions == null)
                 return;
-            OpenPicker("ADD A FORM OR SCHOOL", "Choose a path for an open slot in your loadout.");
-            foreach (CombatSpecializationDefinitionV2Model option in _model.SpecializationPickerOptions())
+            _pickerDisciplineId = string.Empty;
+            OpenPicker("Choose your discipline", "Start with a weapon or spellcasting. Then find your path.");
+            SetPickerStep(false);
+            List<Button> choices = new();
+            foreach (var group in _model.SpecializationPickerOptions()
+                         .GroupBy(row => row.CombatDisciplineId, StringComparer.Ordinal)
+                         .OrderBy(group => group.All(row => row.SpecializationKind == CombatSpecializationKindV2.School)))
             {
+                CombatSpecializationDefinitionV2Model[] options = group.ToArray();
+                string parentId = group.Key;
                 Button button = BuildPickerOption(
-                    option.DisplayName,
-                    DisciplineDisplayName(option.CombatDisciplineId),
-                    ResolveSpecializationIcon(option.SpecializationId));
+                    PickerDisciplineName(parentId),
+                    ResolvePickerDisciplineIcon(parentId) ?? ResolveSpecializationIcon(options[0].SpecializationId),
+                    DisciplineColor(parentId));
+                button.name = $"PickerDiscipline_{parentId}";
+                button.clicked += () => OpenDisciplineSpecializations(parentId);
+                choices.Add(button);
+            }
+            _pickerOptions.Add(BuildPickerConstellation(choices));
+            if (choices.Count == 0)
+                _pickerOptions.Add(BuildWaitingState("All available forms and schools are already in your loadout."));
+            FocusPickerOption(choices.FirstOrDefault());
+        }
+
+        private void OpenDisciplineSpecializations(string parentId)
+        {
+            if (_model == null || _pickerOptions == null)
+                return;
+            CombatSpecializationDefinitionV2Model[] options = _model.SpecializationPickerOptions()
+                .Where(row => string.Equals(row.CombatDisciplineId, parentId, StringComparison.Ordinal))
+                .ToArray();
+            if (options.Length == 0)
+            {
+                OpenSpecializationPicker();
+                return;
+            }
+            _pickerDisciplineId = parentId;
+            bool schools = options.All(row => row.SpecializationKind == CombatSpecializationKindV2.School);
+            OpenPicker(schools ? "Choose your school" : "Choose your form",
+                $"Explore {PickerDisciplineName(parentId).ToLowerInvariant()}. Select a path to add it to your loadout.");
+            SetPickerStep(true);
+            List<Button> choices = new();
+            foreach (CombatSpecializationDefinitionV2Model option in options)
+            {
+                Button button = BuildPickerOption(option.DisplayName,
+                    ResolveSpecializationIcon(option.SpecializationId), DisciplineColor(parentId));
+                button.name = $"PickerSpecialization_{option.SpecializationId}";
                 button.clicked += () =>
                 {
-                    if (_model.AddSpecialization(option.SpecializationId))
+                    if (_model?.AddSpecialization(option.SpecializationId) == true)
                     {
                         EnsureWeaponConfiguration(option.CombatDisciplineId);
                         _focusedSpecializationId = option.SpecializationId;
                         MarkDirtyAndRender();
+                        ClosePicker();
+                        _cards?.Q<Button>(className: SelectedClass)?.Focus();
                     }
-                    ClosePicker();
                 };
-                _pickerOptions.Add(button);
+                choices.Add(button);
             }
+            _pickerOptions.Add(BuildPickerConstellation(choices));
+            FocusPickerOption(choices.FirstOrDefault());
+        }
+
+        private static VisualElement BuildPickerConstellation(IReadOnlyList<Button> choices)
+        {
+            VisualElement constellation = new();
+            constellation.AddToClassList("picker-constellation");
+            VisualElement orbit = new() { pickingMode = PickingMode.Ignore };
+            orbit.AddToClassList("picker-orbit");
+            VisualElement innerOrbit = new() { pickingMode = PickingMode.Ignore };
+            innerOrbit.AddToClassList("picker-orbit-inner");
+            orbit.Add(innerOrbit);
+            VisualElement compass = new() { pickingMode = PickingMode.Ignore };
+            compass.AddToClassList("picker-compass");
+            orbit.Add(compass);
+            constellation.Add(orbit);
+            foreach (Button choice in choices)
+                constellation.Add(choice);
+
+            // Keep every crest visible and its label upright as the panel resizes.
+            constellation.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                float width = constellation.contentRect.width;
+                float height = constellation.contentRect.height;
+                if (width <= 0f || height <= 0f || choices.Count == 0)
+                    return;
+                float scale = Mathf.Min(1f, width / 860f, height / 440f);
+                float iconSize = (choices.Count <= 3 ? 128f : 104f) * scale;
+                float choiceWidth = 168f * scale;
+                float labelHeight = 46f * scale;
+                float centerX = width * 0.5f;
+                float centerY = (height - labelHeight) * 0.5f;
+                float radiusX = (width - choiceWidth) * 0.49f;
+                float radiusY = (height - iconSize - labelHeight) * 0.48f;
+                orbit.style.left = centerX - radiusX;
+                orbit.style.top = centerY - radiusY;
+                orbit.style.width = radiusX * 2f;
+                orbit.style.height = radiusY * 2f;
+                for (int index = 0; index < choices.Count; index++)
+                {
+                    // One or two remaining paths stay centered, without empty positions.
+                    float angle = choices.Count <= 2 ? Mathf.PI - index * Mathf.PI :
+                        -Mathf.PI * 0.5f + index * Mathf.PI * 2f / choices.Count;
+                    if (choices.Count == 6)
+                        angle += Mathf.PI / 6f;
+                    float x = choices.Count == 1 ? centerX : centerX + Mathf.Cos(angle) * radiusX;
+                    float y = choices.Count <= 2 ? centerY : centerY + Mathf.Sin(angle) * radiusY;
+                    Button choice = choices[index];
+                    choice.style.left = x - choiceWidth * 0.5f;
+                    choice.style.top = y - iconSize * 0.5f;
+                    choice.style.width = choiceWidth;
+                    VisualElement crest = choice.Q<VisualElement>(className: "picker-crest");
+                    crest.style.width = iconSize;
+                    crest.style.height = iconSize;
+                    Label name = choice.Q<Label>();
+                    name.style.fontSize = 15f * scale;
+                    name.style.marginTop = 14f * scale;
+                    name.style.minHeight = 32f * scale;
+                }
+            });
+            return constellation;
+        }
+
+        private void SetPickerStep(bool choosingSpecialization)
+        {
+            _pickerDisciplineStep?.EnableInClassList("is-current", !choosingSpecialization);
+            _pickerDisciplineStep?.EnableInClassList("is-complete", choosingSpecialization);
+            if (_pickerDisciplineStep != null)
+                _pickerDisciplineStep.text = choosingSpecialization
+                    ? $"01  {PickerDisciplineName(_pickerDisciplineId)}"
+                    : "01  WEAPON / SPELLCASTING";
+            _pickerSpecializationStep?.EnableInClassList("is-current", choosingSpecialization);
+            if (_pickerBack != null)
+                _pickerBack.text = choosingSpecialization ? "‹  BACK TO DISCIPLINES" : "CANCEL";
+            if (_pickerHint != null)
+                _pickerHint.text = choosingSpecialization
+                    ? "Add a path, then choose its abilities."
+                    : "Choose a discipline to explore its forms or schools.";
+        }
+
+        private void BackInPicker()
+        {
+            if (string.IsNullOrEmpty(_pickerDisciplineId))
+            {
+                ClosePicker();
+                return;
+            }
+            string parentId = _pickerDisciplineId;
+            OpenSpecializationPicker();
+            FocusPickerOption(_pickerOptions?.Q<Button>($"PickerDiscipline_{parentId}"));
+        }
+
+        private void FocusPickerOption(Button? button)
+        {
+            button?.schedule.Execute(() =>
+            {
+                if (_picker?.ClassListContains(OpenClass) == true && button.panel != null)
+                    button.Focus();
+            });
         }
 
         private void EnsureWeaponConfiguration(string parentId)
@@ -773,7 +928,11 @@ namespace Arena.UI
             _picker.AddToClassList(OpenClass);
         }
 
-        private void ClosePicker() => _picker?.RemoveFromClassList(OpenClass);
+        private void ClosePicker()
+        {
+            _picker?.RemoveFromClassList(OpenClass);
+            _pickerDisciplineId = string.Empty;
+        }
 
         private static VisualElement SectionHeading(string title, string counter)
         {
@@ -880,23 +1039,25 @@ namespace Arena.UI
                 parent[parent.childCount - 1].AddToClassList("is-last");
         }
 
-        private static Button BuildPickerOption(string title, string meta, Sprite? icon)
+        private static Button BuildPickerOption(string title, Sprite? icon, Color accent)
         {
             Button option = new();
             option.AddToClassList("picker-option");
+            VisualElement crest = new() { pickingMode = PickingMode.Ignore };
+            crest.AddToClassList("picker-crest");
+            VisualElement aura = new() { pickingMode = PickingMode.Ignore };
+            aura.AddToClassList("picker-crest-aura");
+            aura.style.backgroundColor = new Color(accent.r, accent.g, accent.b, 0.12f);
+            ApplyBorderColor(aura, new Color(accent.r, accent.g, accent.b, 0.55f));
+            crest.Add(aura);
             VisualElement iconElement = new() { pickingMode = PickingMode.Ignore };
             iconElement.AddToClassList("picker-option-icon");
             ApplyIcon(iconElement, icon);
-            option.Add(iconElement);
-            VisualElement copy = new() { pickingMode = PickingMode.Ignore };
-            copy.AddToClassList("picker-option-copy");
-            Label name = new(title.ToUpperInvariant());
+            crest.Add(iconElement);
+            option.Add(crest);
+            Label name = new(title.ToUpperInvariant()) { pickingMode = PickingMode.Ignore };
             name.AddToClassList("picker-option-name");
-            copy.Add(name);
-            Label detail = new(meta);
-            detail.AddToClassList("picker-option-meta");
-            copy.Add(detail);
-            option.Add(copy);
+            option.Add(name);
             return option;
         }
 
@@ -946,6 +1107,20 @@ namespace Arena.UI
             => ActionIconResolver.Resolve(
                 "SPECIALIZATION",
                 WireIdentifier.Normalize(specializationId));
+
+        private static string PickerDisciplineName(string disciplineId)
+            => disciplineId == "SWORD_AND_SHIELD" ? "SWORD & SHIELD" : DisciplineDisplayName(disciplineId);
+
+        private static Sprite? ResolvePickerDisciplineIcon(string disciplineId)
+            => disciplineId switch
+            {
+                "DAGGERS" => ItemIconResolver.Resolve("training_dagger_pair"),
+                "TWO_HANDED_SWORD" => ItemIconResolver.Resolve("training_two_hand_sword"),
+                "SWORD_AND_SHIELD" => ItemIconResolver.Resolve("training_sword_and_shield"),
+                "ARCHER_BOW" => ItemIconResolver.Resolve("training_bow"),
+                "STAFF" => ActionIconResolver.Resolve("COMBAT_DISCIPLINE_SWITCH", "ARCANA"),
+                _ => null,
+            };
 
         internal static Color DisciplineColor(string disciplineId)
             => WireIdentifier.Normalize(disciplineId) switch

@@ -593,28 +593,33 @@
 }
 
 .picker-panel {
-    width: 720px;
-    max-width: 90%;
-    height: 76%;
-    padding: 30px;
-    background-color: #111B20;
+    width: 1040px;
+    max-width: 92%;
+    height: 84%;
+    max-height: 780px;
+    padding: 28px;
+    background-color: #0E171C;
     border-width: 1px;
-    border-color: #68706A;
+    border-color: #566363;
     border-radius: 3px;
 }
 
 .picker-heading {
     flex-direction: row;
+    flex-shrink: 0;
     justify-content: space-between;
-    padding-bottom: 20px;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--hub-line);
+    padding-bottom: 22px;
 }
 
-.picker-title { -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf"); font-size: 24px; }
+.picker-heading-copy { flex-grow: 1; min-width: 0; margin-right: 16px; }
+
+.picker-title {
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 28px;
+    white-space: normal;
+}
 
 .picker-subtitle {
-    max-width: 555px;
     margin-top: 8px;
     font-size: 14px;
     color: var(--hub-muted);
@@ -625,47 +630,144 @@
     width: 36px;
     height: 36px;
     font-size: 23px;
+    flex-shrink: 0;
 }
 
-.picker-options { flex-grow: 1; margin-top: 20px; }
+.picker-steps {
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+    padding: 14px 0;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-color: var(--hub-line-soft);
+}
+
+.picker-step { font-size: 11px; letter-spacing: 1px; color: var(--hub-dim); }
+.picker-step.is-current { color: var(--hub-brass-bright); }
+.picker-step.is-complete { color: var(--hub-success); }
+.picker-step-line { height: 1px; width: 42px; margin: 0 18px; background-color: var(--hub-line); }
+
+.picker-options { flex-grow: 1; min-height: 0; margin-top: 18px; }
+
+/* Crests sit on an engraved orbit, with open space in place of card surfaces. */
+.picker-constellation { flex-grow: 1; min-height: 0; }
+
+.picker-orbit {
+    position: absolute;
+    border-width: 1px;
+    border-color: rgba(190,165,120,0.2);
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+}
+
+.picker-orbit-inner {
+    position: absolute;
+    top: 16%;
+    right: 16%;
+    bottom: 16%;
+    left: 16%;
+    border-width: 1px;
+    border-color: rgba(190,165,120,0.07);
+    border-radius: 50%;
+}
+
+.picker-compass {
+    width: 18px;
+    height: 18px;
+    rotate: 45deg;
+    border-width: 1px;
+    border-color: rgba(190,165,120,0.45);
+    background-color: rgba(190,165,120,0.04);
+}
 
 .arena-hub-ui .picker-option {
-    min-height: 78px;
-    flex-shrink: 0;
-    margin-bottom: 8px;
-    padding: 12px 16px;
-    flex-direction: row;
+    position: absolute;
     align-items: center;
     justify-content: flex-start;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(0,0,0,0);
+    overflow: visible;
+}
+
+.arena-hub-ui .picker-option:hover,
+.arena-hub-ui .picker-option:focus,
+.arena-hub-ui .picker-option:active { background-color: rgba(0,0,0,0); }
+
+.picker-crest {
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-width: 1px;
+    border-color: #566363;
+    border-radius: 50%;
+    background-color: #121E24;
+    transition-property: scale, border-color, background-color;
+    transition-duration: 0.18s;
+}
+
+.picker-crest-aura {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    bottom: -8px;
+    left: -8px;
+    border-width: 1px;
+    border-radius: 50%;
+    opacity: 0.3;
+    transition-property: opacity, scale;
+    transition-duration: 0.18s;
 }
 
 .picker-option-icon {
-    width: 48px;
-    height: 48px;
-    margin-right: 18px;
+    width: 80%;
+    height: 80%;
     flex-shrink: 0;
+    border-radius: 50%;
     -unity-background-scale-mode: scale-to-fit;
 }
 
-.picker-option-copy { min-width: 0; }
-
-.picker-option-copy Label {
-    font-size: 14px;
-    white-space: normal;
-    margin-top: 3px;
-}
-
-.picker-option-copy .picker-option-name {
-    color: var(--hub-text);
-    -unity-text-align: middle-left;
-    font-size: 15px;
-}
-
-.picker-option-copy .picker-option-meta {
+.picker-option-name {
+    align-self: stretch;
     color: var(--hub-muted);
-    -unity-text-align: middle-left;
-    font-size: 12px;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    -unity-text-align: upper-center;
+    white-space: normal;
+    letter-spacing: 1px;
+    transition-property: color;
+    transition-duration: 0.18s;
 }
+
+.picker-option:hover .picker-crest,
+.picker-option:focus .picker-crest {
+    border-color: var(--hub-brass-bright);
+    background-color: #233138;
+    scale: 1.06 1.06;
+}
+
+.picker-option:hover .picker-crest-aura,
+.picker-option:focus .picker-crest-aura { opacity: 1; scale: 1.04 1.04; }
+
+.picker-option:hover .picker-option-name,
+.picker-option:focus .picker-option-name { color: var(--hub-brass-bright); }
+
+.picker-option:active .picker-crest { scale: 0.98 0.98; }
+
+.picker-footer {
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 16px;
+    border-top-width: 1px;
+    border-top-color: var(--hub-line-soft);
+}
+
+.arena-hub-ui .picker-back { height: 36px; padding: 0 14px; font-size: 11px; color: var(--hub-brass-bright); }
+.picker-hint { flex-shrink: 1; margin-left: 18px; font-size: 12px; color: var(--hub-muted); white-space: normal; -unity-text-align: middle-right; }
 
 .save-summary-icon {
     width: 30px;
