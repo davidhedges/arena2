@@ -1049,7 +1049,6 @@ namespace Arena.Tests.Editor
                 object attack = attacks[0]!;
                 RequireField(attackType, "clip").SetValue(attack, clip);
 
-                RequireField(attackType, "visualInterruptibleAtSeconds").SetValue(attack, 0.42f);
                 SetClipEvents(clip, ("OnVisualInterruptible", 0.38f));
                 MethodInfo resolver = RequireMethod(setType, "GetVisualInterruptibleAtSeconds", typeof(int), typeof(bool));
 
@@ -1084,7 +1083,6 @@ namespace Arena.Tests.Editor
                 object attack = attacks[0]!;
                 RequireField(attackType, "clip").SetValue(attack, clip);
 
-                RequireField(attackType, "lowerBodyUnlockAtSeconds").SetValue(attack, 0.42f);
                 SetClipEvents(clip, ("OnLowerBodyUnlock", 0.37f));
                 MethodInfo resolver = RequireMethod(setType, "GetLowerBodyUnlockAtSeconds", typeof(int), typeof(bool));
 
@@ -1102,28 +1100,15 @@ namespace Arena.Tests.Editor
         public void CombatAnimationSet_LowerBodyBlendOutUsesExplicitDefault()
         {
             Type setType = RequireRuntimeType("Arena.Presentation.CombatAnimationSet");
-            Type attackType = RequireRuntimeType("Arena.Presentation.WeaponMeleeAttackAuthoring");
             ScriptableObject set = ScriptableObject.CreateInstance(setType);
             try
             {
                 RequireMethod(setType, "EnsureMeleeAttackListSize", typeof(int)).Invoke(set, new object[] { 1 });
 
-                IList attacks = (IList)RequireField(setType, "meleeAttacks").GetValue(set)!;
-                object attack = attacks[0]!;
-                FieldInfo lowerBodyBlendOutSeconds = RequireField(attackType, "lowerBodyBlendOutSeconds");
                 MethodInfo resolver = RequireMethod(setType, "GetLowerBodyBlendOutSeconds", typeof(int), typeof(float));
-
-                lowerBodyBlendOutSeconds.SetValue(attack, -1f);
-                attacks[0] = attack;
                 Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
-
-                lowerBodyBlendOutSeconds.SetValue(attack, 0f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
-
-                lowerBodyBlendOutSeconds.SetValue(attack, 0.25f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.25f })!, Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, -1f })!, Is.Zero);
             }
             finally
             {
@@ -1146,8 +1131,6 @@ namespace Arena.Tests.Editor
 
                 object entry = Activator.CreateInstance(spellEntryType)!;
                 RequireField(spellEntryType, "clip").SetValue(entry, clip);
-                RequireField(spellEntryType, "lowerBodyUnlockAtSeconds").SetValue(entry, 0.35f);
-                RequireField(spellEntryType, "visualInterruptibleAtSeconds").SetValue(entry, 0.65f);
                 SetClipEvents(
                     clip,
                     ("OnLowerBodyUnlock", 0.25f),

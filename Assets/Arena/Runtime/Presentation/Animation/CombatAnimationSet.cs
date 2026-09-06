@@ -617,12 +617,6 @@ namespace Arena.Presentation
         public SpellCastOrigin castOrigin;
         [Tooltip("Mirror the complete humanoid spell presentation. The effective cast origin is mirrored with it.")]
         public bool mirrorPresentation;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip instead.")]
-        public float lowerBodyUnlockAtSeconds;
-        [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
-        public float lowerBodyBlendOutSeconds;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnVisualInterruptible from the selected clip instead.")]
-        public float visualInterruptibleAtSeconds;
         [Tooltip("Optional temporary weapon/shield visual driven by animation-authored prop sockets until the spell projectile releases.")]
         public SpellAnimatedPropHandoff animatedProp;
 
@@ -1193,12 +1187,6 @@ namespace Arena.Presentation
         public WeaponMeleePresentationMode presentationMode;
         [Tooltip("Seconds skipped from the beginning of a single-clip melee presentation. OnStrikeHit remains stamped on the physical contact pose; exported gameplay hit times subtract this trim. Phased melee does not support startup trim.")]
         [Min(0f)] public float startupTrimSeconds;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip or phased segment instead.")]
-        public float lowerBodyUnlockAtSeconds;
-        [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
-        public float lowerBodyBlendOutSeconds;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnVisualInterruptible from the selected clip or phased segment instead.")]
-        public float visualInterruptibleAtSeconds;
         [Tooltip("Grounded phased clips for this attack when Presentation Mode is Phased.")]
         public WeaponPhasedActionClipSet phasedGround;
         [Tooltip("Airborne phased clips for this attack when Presentation Mode is Phased.")]
@@ -2760,9 +2748,6 @@ namespace Arena.Presentation
                 combat = WeaponStrikeCombatAuthoring.CreateDefault(authoredId),
                 presentationMode = WeaponMeleePresentationMode.SingleClip,
                 startupTrimSeconds = 0f,
-                lowerBodyUnlockAtSeconds = 0f,
-                lowerBodyBlendOutSeconds = 0f,
-                visualInterruptibleAtSeconds = 0f,
                 phasedGround = default,
                 phasedAir = default,
                 animationVfxBindings = new List<CombatAnimationVfxBinding>(),
