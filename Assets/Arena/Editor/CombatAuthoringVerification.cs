@@ -26,6 +26,8 @@ namespace Arena.Editor
             public List<string> inventoryErrors = new();
             public int selectableMeleeAbilitiesChecked;
             public List<string> selectableMeleeErrors = new();
+            public int generatedVfxCuesChecked;
+            public List<string> vfxOwnershipErrors = new();
             public List<MeleeRow> melee = new();
             public List<VfxRow> vfx = new();
         }
@@ -132,16 +134,21 @@ namespace Arena.Editor
             try { report.selectableMeleeErrors = CheckSelectableMeleeTiming(out report.selectableMeleeAbilitiesChecked); }
             catch (Exception error) { report.selectableMeleeErrors.Add(error.ToString()); }
             var window = ScriptableObject.CreateInstance<SpellAuthoringWindow>();
-            try { window.CaptureVfxInventory(report); }
+            try
+            {
+                window.CaptureVfxInventory(report);
+                report.vfxOwnershipErrors = window.CheckGeneratedCueOwnership(out report.generatedVfxCuesChecked);
+            }
             catch (Exception error) { report.inventoryErrors.Add("VFX inventory: " + error); }
             finally { UnityEngine.Object.DestroyImmediate(window); }
             File.WriteAllText(Path.Combine(output, "inventory.json"), JsonUtility.ToJson(report, true));
             string summary = $"[CombatAuthoringVerification] Tests {report.testsPassed} passed / {report.testsFailed} failed; "
                 + $"{report.selectableMeleeAbilitiesChecked} selectable melee abilities checked, "
                 + $"{report.selectableMeleeErrors.Count} timing errors; {report.melee.Count} melee attacks, "
-                + $"{report.vfx.Count} VFX comparisons. Report: {output}";
+                + $"{report.vfx.Count} VFX comparisons, {report.generatedVfxCuesChecked} generated cues checked, "
+                + $"{report.vfxOwnershipErrors.Count} VFX ownership errors. Report: {output}";
             if (!report.testsCompleted || report.testsFailed > 0 || report.inventoryErrors.Count > 0
-                || report.selectableMeleeErrors.Count > 0)
+                || report.selectableMeleeErrors.Count > 0 || report.vfxOwnershipErrors.Count > 0)
                 Debug.LogError(summary);
             else
                 Debug.Log(summary);

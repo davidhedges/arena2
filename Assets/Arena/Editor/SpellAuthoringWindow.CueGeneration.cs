@@ -823,14 +823,9 @@ namespace Arena.Editor
             AddDiff(diffs, "vfx_id", gen.VfxId, Normalize(cat.vfx_id));
             AddDiff(diffs, "duration_ms", gen.DurationMs.ToString(), cat.duration_ms.ToString());
 
-            // projectile_sequence_index participates for visuals bound to an authoritative projectile row.
-            if (gen.ProjectileSequenceIndex.HasValue
-                && (string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal)
-                    || string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileTrail, System.StringComparison.Ordinal)))
-            {
-                AddDiff(diffs, "projectile_sequence_index",
-                    gen.ProjectileSequenceIndex.Value.ToString(), cat.projectile_sequence_index.ToString());
-            }
+            // Absence and sequence zero are different conditions, even outside projectile-body cues.
+            AddDiff(diffs, "projectile_sequence_index", gen.ProjectileSequenceIndex?.ToString() ?? "<none>",
+                cat.projectile_sequence_index < 0 ? "<none>" : cat.projectile_sequence_index.ToString());
 
             return diffs;
         }

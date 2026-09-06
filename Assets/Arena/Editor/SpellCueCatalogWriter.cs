@@ -92,6 +92,26 @@ namespace Arena.Editor
         public const string Legacy = "LEGACY";
         private const string CombatVfxCuesKey = "\"combat_vfx_cues\"";
 
+        public static List<string> CompareGeneratedRows(SpellCueRow expected, SpellCueRow actual)
+        {
+            var differences = new List<string>();
+            void Compare(string field, object? left, object? right)
+            {
+                if (!Equals(left, right)) differences.Add($"{field}: {left ?? "<none>"} -> {right ?? "<none>"}");
+            }
+            Compare("slot", expected.Slot, actual.Slot);
+            Compare("trigger", expected.Trigger, actual.Trigger);
+            Compare("anchor", expected.Anchor, actual.Anchor);
+            Compare("vfx_id", expected.VfxId, actual.VfxId);
+            Compare("attach_mode", expected.AttachMode, actual.AttachMode);
+            Compare("vfx_role", expected.VfxRole, actual.VfxRole);
+            Compare("lifecycle", expected.Lifecycle, actual.Lifecycle);
+            Compare("projectile_sequence_index", expected.ProjectileSequenceIndex, actual.ProjectileSequenceIndex);
+            Compare("duration_ms", expected.DurationMs, actual.DurationMs);
+            Compare("sort_order", expected.SortOrder, actual.SortOrder);
+            return differences;
+        }
+
         /// <summary>Checks authoring metadata without changing or projecting runtime cue fields.</summary>
         public static List<string> ValidateOwnership(string catalogJson)
         {
@@ -121,6 +141,11 @@ namespace Arena.Editor
                         errors.Add(identity + ": generated cues require an ABILITY owner and an explicit slot.");
                     if (!string.IsNullOrWhiteSpace(reason))
                         errors.Add(identity + ": generated cues must not retain a manual exception reason.");
+                    foreach (var field in fields)
+                        if (!CanonicalKeyOrder.ContainsKey(field.Key)
+                            && field.Key != "authoring_mode" && field.Key != "authoring_reason"
+                            || field.Key == "hit_index")
+                            errors.Add(identity + ": generated cues cannot own unsupported field '" + field.Key + "'.");
                 }
                 else
                 {

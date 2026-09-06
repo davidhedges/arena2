@@ -15871,8 +15871,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 12,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -15915,8 +15914,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 14,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -15931,8 +15929,7 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 15,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -15946,8 +15943,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 20,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -15961,8 +15957,7 @@
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
       "sort_order": 16,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16089,8 +16084,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 120,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16151,8 +16145,7 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 131,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16166,8 +16159,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 132,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16196,8 +16188,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 130,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16212,8 +16203,7 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 140,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16227,8 +16217,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 150,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16319,8 +16308,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 156,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16334,8 +16322,7 @@
       "lifecycle": "UNTIL_TERMINAL_EVENT",
       "duration_ms": 0,
       "sort_order": 168,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16349,8 +16336,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 170,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16364,8 +16350,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 180,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16409,8 +16394,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1200,
       "sort_order": 175,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16424,8 +16408,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 176,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16439,8 +16422,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 179,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16454,8 +16436,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 153,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16485,8 +16466,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 153,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16516,8 +16496,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 180,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16545,8 +16524,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 183,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16560,8 +16538,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 184,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16649,8 +16626,7 @@
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
       "sort_order": 193,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16664,8 +16640,7 @@
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
       "sort_order": 194,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16695,8 +16670,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 189,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16786,8 +16760,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 200,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16859,8 +16832,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 192,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16934,8 +16906,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1200,
       "sort_order": 208,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -16991,8 +16962,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 196,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17006,8 +16976,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 5000,
       "sort_order": 197,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17051,8 +17020,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 213,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17066,8 +17034,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 214,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17141,8 +17108,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 198,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17156,8 +17122,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 199,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17171,8 +17136,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 200,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17201,8 +17165,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 202,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17320,8 +17283,7 @@
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
       "sort_order": 201,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17350,8 +17312,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 328,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17381,8 +17342,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 330,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17412,8 +17372,7 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 202,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17623,8 +17582,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 203,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17669,8 +17627,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 210,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17700,8 +17657,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 230,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17715,8 +17671,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 231,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17761,8 +17716,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 234,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17792,8 +17746,7 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 236,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -17807,8 +17760,7 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 237,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -18357,8 +18309,7 @@
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
       "sort_order": 325,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",
@@ -18372,8 +18323,7 @@
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
       "sort_order": 326,
-      "authoring_mode": "MANUAL",
-      "authoring_reason": "Exact generation candidate; awaiting verified materialization."
+      "authoring_mode": "GENERATED"
     },
     {
       "owner_kind": "ABILITY",

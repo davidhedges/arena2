@@ -1304,7 +1304,7 @@ namespace Arena.Editor
             public string attach_mode = string.Empty;
             public string vfx_role = string.Empty;
             public string lifecycle = string.Empty;
-            public int projectile_sequence_index = 0;
+            public int projectile_sequence_index = -1;
             public int duration_ms = 0;
             public int sort_order = 0;
         }
