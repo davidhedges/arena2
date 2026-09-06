@@ -86,6 +86,27 @@ namespace Arena.Tests.Editor
             Assert.That(ResolvePrefab(entries, "VFX_CLOUDBURST_RAIN_01"), Is.SameAs(cloudburst));
         }
 
+        [TestCase("VFX_CLEANSE_HOLY_01", "848f645180e6047e18700b34f72f9403", 1754114712383682L)]
+        [TestCase("VFX_EARTHQUAKE_GROUND_01", "df469e24b221f4366ab9d4319d85bb6b", 179933313334722555L)]
+        public void RestoredVfxReferencesResolveTheAuthoredParticleObject(string vfxId, string expectedGuid, long expectedFileId)
+        {
+            var registry = new SerializedObject(AssetDatabase.LoadMainAssetAtPath(
+                "Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset"));
+            GameObject prefab = (GameObject)ResolvePrefab(registry.FindProperty("entries"), vfxId)!;
+            Assert.That(prefab, Is.Not.Null, vfxId);
+            Assert.That(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(prefab, out string guid, out long fileId), Is.True);
+            Assert.That(guid, Is.EqualTo(expectedGuid));
+            Assert.That(fileId, Is.EqualTo(expectedFileId), "Keep the originally referenced sub-object, not the whole effect tree.");
+            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                Assert.That(instance.GetComponentInChildren<ParticleSystem>(true), Is.Not.Null);
+                Assert.That(instance.GetComponentInChildren<Collider>(true), Is.Null);
+                Assert.That(instance.GetComponentInChildren<Rigidbody>(true), Is.Null);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(instance); }
+        }
+
         [Test]
         public void FissureVfxRegistrySeparatesAuthoritativeTravelFromTerminalEruption()
         {
