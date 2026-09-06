@@ -15752,13 +15752,6 @@
     },
     {
       "presentation_kind": "STATUS",
-      "presentation_id": "HEMORRHAGING",
-      "display_name": "Hemorrhaging (Legacy)",
-      "description": "Deprecated persisted effect: movement advances active Bleed timers. No current technique applies this status.",
-      "sort_order": 10150
-    },
-    {
-      "presentation_kind": "STATUS",
       "presentation_id": "CRUELTY",
       "display_name": "Cruelty",
       "description": "Your next attack that consumes Vulnerable consumes all available stacks.",

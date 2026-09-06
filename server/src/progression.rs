@@ -1469,7 +1469,6 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::VengeanceAura,
         StatusEffectKind::DamageTakenFromSourceAmp,
         StatusEffectKind::Hemorrhage,
-        StatusEffectKind::Hemorrhaging,
         StatusEffectKind::MeleeAttackModifier,
         StatusEffectKind::AttackSpeed,
         StatusEffectKind::CastSpeed,
@@ -10118,12 +10117,9 @@ mod tests {
                 .with_dispel_types(vec![StatusDispelType::Bleed]),
             }]
         );
-        assert_eq!(
-            StatusEffectKind::from_wire("HEMORRHAGING"),
-            Some(StatusEffectKind::Hemorrhaging),
-            "legacy persisted Hemorrhaging rows must remain readable"
-        );
-        assert!(authored_status_presentation_ids(progression_catalog()).contains("HEMORRHAGING"));
+        assert_eq!(StatusEffectKind::from_wire("HEMORRHAGING"), None);
+        assert!(serde_json::from_str::<StatusEffectKind>("\"HEMORRHAGING\"").is_err());
+        assert!(!authored_status_presentation_ids(progression_catalog()).contains("HEMORRHAGING"));
     }
 
     #[test]
