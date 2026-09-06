@@ -477,7 +477,7 @@ namespace Arena.Tests.Editor
                 Is.EqualTo("episode_throne_twin_stairs_01"));
             Assert.That(
                 snapshot["withoutExample.return"],
-                Is.EqualTo("connector_corner_return_01"));
+                Is.EqualTo(snapshot["withoutVestibule.return"]));
             Assert.That(snapshot["withoutVestibule.resolved"], Is.EqualTo("True"));
             Assert.That(
                 snapshot["withoutVestibule.compression"],
@@ -487,7 +487,7 @@ namespace Arena.Tests.Editor
                 Is.EqualTo("episode_throne_twin_stairs_01"));
             Assert.That(
                 snapshot["withoutVestibule.return"],
-                Is.EqualTo("connector_corner_return_01"));
+                Is.EqualTo("connector_corner_return_01").Or.EqualTo("connector_generic_room_01"));
             Assert.That(snapshot["withoutBoth.resolved"], Is.EqualTo("True"));
             Assert.That(snapshot["withoutBoth.compression"], Is.Empty);
             Assert.That(snapshot["withoutBoth.reason"], Is.Empty);
@@ -561,7 +561,9 @@ namespace Arena.Tests.Editor
             ConstructorInfo constructor = transitionType.GetConstructor(new[]
             {
                 typeof(Vector2Int),
+                typeof(int),
                 typeof(Vector2Int),
+                typeof(int),
                 typeof(string),
                 typeof(Vector2Int[]),
                 typeof(Vector2Int[]),
@@ -575,7 +577,9 @@ namespace Arena.Tests.Editor
             object transition = constructor.Invoke(new object[]
             {
                 new Vector2Int(1, 0),
+                13,
                 new Vector2Int(0, 0),
+                12,
                 "step-strip",
                 new[] { new Vector2Int(0, -1) },
                 new[] { new Vector2Int(2, 0) },
@@ -652,6 +656,11 @@ namespace Arena.Tests.Editor
                 methodName,
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             Assert.That(method, Is.Not.Null, $"Missing diagnostic method {methodName}.");
+            // Diagnostic geometry is temporary. Recording thousands of these
+            // objects in the user's Undo history can overflow it during a suite.
+            using var undoScope = (IDisposable)GeneratorType.GetMethod(
+                "SuppressGenerationUndo", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, null)!;
             return (string)method.Invoke(null, new object[] { seed })!;
         }
 

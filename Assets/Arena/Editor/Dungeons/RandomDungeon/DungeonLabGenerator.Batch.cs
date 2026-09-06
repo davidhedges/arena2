@@ -2274,11 +2274,17 @@ namespace DungeonLab.Editor
             }
 
             string lastRejection = string.Empty;
+            // A family composes a different subset of recipe opportunities for
+            // each seed. Absence at one seed does not make an enabled recipe
+            // unpreviewable. Search a bounded, repeatable set of actual graphs;
+            // keep all production compatibility predicates intact.
+            const int diagnosticSeedAttempts = 64;
+            for (int attempt = 0; attempt < diagnosticSeedAttempts; attempt++)
             foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
             {
                 RouteIntent intent = BuildTopologyRouteIntent(
                     topology,
-                    seed,
+                    unchecked(seed + attempt),
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty);
                 if (!TryResolveRecipeOpportunities(
@@ -3933,9 +3939,11 @@ namespace DungeonLab.Editor
                     ReturnRecipeSlotId);
                 string firstSelection = firstCompression?.Value<string>("id") ?? string.Empty;
                 string secondSelection = secondCompression?.Value<string>("id") ?? string.Empty;
-                firstSelections.Add(firstSelection);
-                secondSelections.Add(secondSelection);
-                if (offset == 0)
+                // Generic architecture is an intentional outcome when the
+                // optional opportunity is not selected. It is not a recipe ID.
+                if (firstCompression != null) firstSelections.Add(firstSelection);
+                if (secondCompression != null) secondSelections.Add(secondSelection);
+                if (firstCompression != null)
                 {
                     var candidates = new List<string>();
                     foreach (JToken candidate in
@@ -3945,29 +3953,28 @@ namespace DungeonLab.Editor
                         candidates.Add(candidate.Value<string>() ?? string.Empty);
                     }
 
-                    firstCandidates = string.Join(",", candidates);
+                    string candidateIds = string.Join(",", candidates);
+                    if (firstCandidates.Length != 0 && firstCandidates != candidateIds)
+                        throw new InvalidOperationException("Compression candidate pool changed within the diagnostic corpus.");
+                    firstCandidates = candidateIds;
                 }
 
                 nonTargetSelectionsPreserved &=
                     string.Equals(
                         firstLandmark?.Value<string>("id"),
-                        ThroneRecipeFixtureId,
-                        StringComparison.Ordinal) &&
-                    string.Equals(
                         secondLandmark?.Value<string>("id"),
-                        ThroneRecipeFixtureId,
                         StringComparison.Ordinal) &&
                     string.Equals(
                         firstReturn?.Value<string>("id"),
-                        CornerReturnRecipeFixtureId,
-                        StringComparison.Ordinal) &&
-                    string.Equals(
                         secondReturn?.Value<string>("id"),
-                        CornerReturnRecipeFixtureId,
                         StringComparison.Ordinal);
                 firstRows.Add(RecipePoolSeedRow(corpusSeed, firstSelection, first));
                 secondRows.Add(RecipePoolSeedRow(corpusSeed, secondSelection, second));
             }
+
+            if (!TryResolveSliceDDisabledScenario(catalog, Array.Empty<string>(), seed,
+                    out _, out _, out string baselineLandmark, out string baselineReturn, out string baselineReason))
+                throw new InvalidOperationException(baselineReason);
 
             bool withoutExampleResolved = TryResolveSliceDDisabledScenario(
                 catalog,
@@ -3997,6 +4004,9 @@ namespace DungeonLab.Editor
                 out _,
                 out string withoutBothReason);
 
+            nonTargetSelectionsPreserved &=
+                withoutExampleLandmark == baselineLandmark && withoutVestibuleLandmark == baselineLandmark &&
+                withoutExampleReturn == baselineReturn && withoutVestibuleReturn == baselineReturn;
             string firstDigest = ComputeSha256(string.Join("\n", firstRows));
             string secondDigest = ComputeSha256(string.Join("\n", secondRows));
             JObject previewContext = firstGallery["previewContext"] as JObject;
