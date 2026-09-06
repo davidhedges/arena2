@@ -1,16 +1,14 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace Arena.Presentation
 {
     /// <summary>
-    /// One slot's look in a per-school VFX set. Merges the palette (design doc §3.1 —
-    /// <c>vfx_id</c> + duration + self-terminating) with the registry data (<c>prefab</c> + <c>scale</c>)
-    /// per decision 10, so a school's whole VFX identity lives in one editable asset. The cue generator
-    /// reads <see cref="vfxId"/>/<see cref="durationMs"/>/<see cref="selfTerminating"/>; <see cref="prefab"/>
-    /// and <see cref="scale"/> document/validate the id→prefab binding the runtime registry still owns.
+    /// One slot's generated look. Prefab and scale are resolved from the runtime registry in the
+    /// inspector; palettes and spell overrides never serialize another copy of those bindings.
     /// </summary>
     [Serializable]
     public struct SchoolVfxSlotEntry
@@ -24,10 +22,52 @@ namespace Arena.Presentation
         public bool selfTerminating;
         [Tooltip("Concrete duration for a ONE_SHOT/DURATION slot (must be > 0 when not self-terminating).")]
         public int durationMs;
-        [Tooltip("Registry scale (documentation/validation; the runtime CombatVFXRegistry still owns the live value).")]
-        public float scale;
-        [Tooltip("The prefab this vfx_id resolves to (documentation/validation; optional).")]
-        public GameObject? prefab;
+    }
+
+    [CustomPropertyDrawer(typeof(SchoolVfxSlotEntry))]
+    internal sealed class SchoolVfxSlotEntryDrawer : PropertyDrawer
+    {
+        private static readonly string[] AuthoredFields = { "slot", "variantId", "vfxId", "selfTerminating", "durationMs" };
+        private static float RowHeight => EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+            => property.isExpanded ? RowHeight * (AuthoredFields.Length + 3) : RowHeight;
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            EditorGUI.BeginProperty(position, label, property);
+            var row = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+            property.isExpanded = EditorGUI.Foldout(row, property.isExpanded, label, true);
+            if (property.isExpanded)
+            {
+                EditorGUI.indentLevel++;
+                foreach (string field in AuthoredFields)
+                {
+                    row.y += RowHeight;
+                    EditorGUI.PropertyField(row, property.FindPropertyRelative(field));
+                }
+                string id = property.FindPropertyRelative("vfxId").stringValue;
+                bool scripted = CombatVFXTemplateRegistry.IsScriptedTemplate(id);
+                var template = scripted ? null : CombatVFXTemplateRegistry.ResolveTemplate(id);
+                row.y += RowHeight;
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    if (scripted)
+                        EditorGUI.LabelField(row, "Runtime binding", "Scripted effect");
+                    else
+                        EditorGUI.ObjectField(row, "Runtime prefab", template?.Prefab, typeof(GameObject), false);
+                    row.y += RowHeight;
+                    if (scripted)
+                        EditorGUI.LabelField(row, "Runtime scale", "Owned by scripted effect");
+                    else if (template != null)
+                        EditorGUI.FloatField(row, "Runtime scale", template.Scale);
+                    else
+                        EditorGUI.LabelField(row, "Runtime binding", "No registry binding resolved");
+                }
+                EditorGUI.indentLevel--;
+            }
+            EditorGUI.EndProperty();
+        }
     }
 
     /// <summary>

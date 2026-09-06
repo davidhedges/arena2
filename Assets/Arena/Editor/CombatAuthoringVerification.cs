@@ -114,6 +114,8 @@ namespace Arena.Editor
                         movement + "CombatAnimationSet_LoopEndPhasedMeleeExportUsesResolvedStartAndLoop",
                         "Arena.Tests.Editor.CombatVfxCueResolverTests.IceSpikes_LegacyCueIsOnlyRedundantWhenAbilityIdentityIsPresent",
                         "Arena.Tests.Editor.SpellVfxGeneratorTests.GeneratedCastHand_FollowsAnimationOriginMirroringAndLegacyInference",
+                        "Arena.Tests.Editor.SpellVfxGeneratorTests.SchoolVfxSets_AreEditorOnlyAuthoringAssets",
+                        "Arena.Tests.Editor.SpellVfxGeneratorTests.SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource",
                         "Arena.Tests.Editor.SpellCueCatalogWriterTests",
                         "Arena.Tests.Editor.MeleeAuthoringDriftTests",
                     },
