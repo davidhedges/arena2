@@ -77,6 +77,10 @@ namespace Arena.Presentation
         private static readonly int GroundedHash         = Animator.StringToHash("Grounded");
         private static readonly int JumpHash             = Animator.StringToHash("Jump");
         private static readonly int FreeFallHash         = Animator.StringToHash("FreeFall");
+        private static readonly int FallingHash          = Animator.StringToHash("Falling");
+        private static readonly int LandingHash          = Animator.StringToHash("Landing");
+        private static readonly int JumpPhaseHash        = Animator.StringToHash("JumpPhase");
+        private static readonly int LandingPhaseHash     = Animator.StringToHash("LandingPhase");
         private static readonly int IsDeadHash           = Animator.StringToHash("IsDead");
         private static readonly int InCombatHash         = Animator.StringToHash("InCombat");
         private static readonly int TriggerStrike1Hash   = Animator.StringToHash("TriggerStrike1");
@@ -217,7 +221,6 @@ namespace Arena.Presentation
         /// above the longest authored channel (Rapid Fire, 5s).
         private const float PhasedMeleeHeldLoopMaxSeconds = 15f;
         private const float SpecialMovementArrivalEndCrossFadeDurationSeconds = 0.08f;
-        private const float LandingRecoveryMinNormalizedTime = 0.16f;
         private const float WeaponTransitionRecoveryMinNormalizedTime = 0.18f;
         private const int BaseLayerIndex = 0;
         private const int UpperBodyLayerIndex = 1;
@@ -235,6 +238,13 @@ namespace Arena.Presentation
         private ClientSimulationState? _simState;
         private Transform? _motionSource;
         private LocalPlayerMotor? _localPlayerMotor;
+        private LocalMovementPredictionDriver? _jumpPredictionDriver;
+        private readonly JumpAnimationPlayback _jumpPlayback = new();
+        private LocomotionSample _jumpLocomotion;
+        private AnimationClip? _landingTimingClip;
+        private float _landingClipSeconds = 0.6f;
+        private float _landingContactSeconds;
+        private bool _landingAnticipationCancelled;
         private WeaponAttachmentController? _weaponAttachments;
         private MeleeAnimationGhostLayer? _meleeGhostLayer;
         private AnimatedAutoAttackGhostLayer? _animatedAutoAttackGhostLayer;
@@ -4127,17 +4137,11 @@ namespace Arena.Presentation
         private void Update()
         {
             if (_animator == null || _simState == null || !_simState.HasState) return;
-            Animator animator = _animator;
             UpdateDodgePlaybackPhase();
 
-            bool grounded = _simState.IsGrounded;
-            LocalPlayerMotor? motor = ResolveLocalPlayerMotor();
-            if (motor != null)
-                grounded = motor.IsGrounded;
-
-            bool presentationGrounded = ResolvePresentationGrounded(grounded);
+            bool presentationGrounded = IsCurrentlyGrounded();
             LocomotionSample locomotion = UpdateLocomotion();
-            UpdateMovementOneShots(locomotion, presentationGrounded);
+            _jumpLocomotion = locomotion;
             UpdateWeaponVisualHandoff();
             UpdateWorldInteractionAnimation();
             UpdatePhasedMeleePlayback();
@@ -4190,10 +4194,98 @@ namespace Arena.Presentation
             }
             RecoverLocomotionFromTransientStates(locomotion, presentationGrounded);
 
-            animator.SetBool(GroundedHash, presentationGrounded);
-            animator.SetBool(JumpHash, _wasGrounded && !presentationGrounded);
-            animator.SetBool(FreeFallHash, !presentationGrounded);
-            _wasGrounded = presentationGrounded;
+        }
+
+        private void LateUpdate()
+        {
+            if (_animator == null || _simState == null || !_simState.HasState || !CanDriveAnimatorState())
+                return;
+
+            bool grounded = IsCurrentlyGrounded();
+            float verticalVelocity = _simState.GetServerVelocity().y;
+            float? landingInSeconds = null;
+            if (_isLocalPlayer)
+            {
+                _jumpPredictionDriver ??= GetComponent<LocalMovementPredictionDriver>();
+                if (_jumpPredictionDriver != null && _jumpPredictionDriver.TryGetJumpAnimationSample(
+                    out PredictedMovementState sample, out landingInSeconds))
+                {
+                    grounded = sample.Grounded;
+                    verticalVelocity = sample.Velocity.y;
+                }
+            }
+
+            if (_isDead || _simState.TryGetSpecialMovementTrack(out _))
+            {
+                _jumpPlayback.Reset(grounded);
+                _landingAnticipationCancelled = false;
+                _wasGrounded = grounded;
+                _animator.SetBool(GroundedHash, grounded);
+                _animator.SetBool(FreeFallHash, !grounded);
+                _animator.SetBool(JumpHash, false);
+                _animator.SetBool(FallingHash, false);
+                _animator.SetBool(LandingHash, false);
+                return;
+            }
+
+            bool wasGrounded = _wasGrounded;
+            UpdateMovementOneShots(_jumpLocomotion, grounded);
+            ResolveLandingTiming();
+            if (_landingAnticipationCancelled)
+            {
+                // Do not reset a landing clip's motion time while it is still
+                // the outgoing side of the cancellation blend.
+                if (IsLandingStateActive()) landingInSeconds = null;
+                else _landingAnticipationCancelled = false;
+            }
+            _jumpPlayback.Tick(grounded, verticalVelocity, landingInSeconds,
+                _landingClipSeconds, _landingContactSeconds, Time.deltaTime);
+            if (_jumpPlayback.LandingCancelled)
+                _landingAnticipationCancelled = true;
+            if (_jumpPlayback.JumpStarted)
+                ForceDirectionalJumpRestartIfNeeded();
+
+            _animator.SetBool(GroundedHash, grounded);
+            _animator.SetBool(JumpHash, _jumpPlayback.JumpStarted);
+            _animator.SetBool(FreeFallHash, !grounded);
+            _animator.SetBool(FallingHash, _jumpPlayback.IsFalling);
+            _animator.SetBool(LandingHash, _jumpPlayback.IsPreparingLanding);
+            _animator.SetFloat(JumpPhaseHash, _jumpPlayback.JumpPhase);
+            _animator.SetFloat(LandingPhaseHash, _jumpPlayback.LandingPhase);
+            _wasGrounded = grounded;
+
+            if (!grounded || !wasGrounded || IsLandingStateActive())
+            {
+                // Prediction and its interpolated transform run in LateUpdate
+                // before us. Re-evaluate the motion-time pose at zero delta so
+                // the visible body and its jump phase use the same frame. This
+                // does not advance clips, events or transition clocks twice.
+                _animator.Update(0f);
+            }
+
+            if (grounded && _jumpLocomotion.IsMoving && _jumpPlayback.CanRecoverWhileMoving
+                && !_animator.IsInTransition(0)
+                && IsLandingState(_animator.GetCurrentAnimatorStateInfo(0).shortNameHash))
+            {
+                _animator.CrossFadeInFixedTime(_inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash,
+                    0.16f, BaseLayerIndex, 0f);
+            }
+        }
+
+        private void ResolveLandingTiming()
+        {
+            if (_animationSet == null || _animator == null) return;
+            CardinalClipSet clips = _inCombat ? _animationSet.jumpLandCombat : _animationSet.jumpLand;
+            float x = _animator.GetFloat(JumpXHash);
+            float z = _animator.GetFloat(JumpZHash);
+            AnimationClip? clip = Mathf.Abs(x) > 0.5f ? (x > 0f ? clips.e : clips.w)
+                : Mathf.Abs(z) > 0.5f ? (z > 0f ? clips.n : clips.s) : clips.center;
+            clip ??= clips.center;
+            if (clip == _landingTimingClip) return;
+            _landingTimingClip = clip;
+            _landingClipSeconds = clip != null ? Mathf.Max(0.001f, clip.length) : 0.6f;
+            _landingContactSeconds = CombatAnimationEvents.GetEventTimeOrFallback(
+                clip, CombatAnimationEvents.OnGroundedFrame, 0f);
         }
 
         private void OnDisable()
@@ -4247,8 +4339,6 @@ namespace Arena.Presentation
                 _weaponAttachments = GetComponent<WeaponAttachmentController>();
             return _weaponAttachments;
         }
-
-        private static bool ResolvePresentationGrounded(bool gameplayGrounded) => gameplayGrounded;
 
         private void BeginWeaponHandoff(
             bool targetInCombat,
@@ -4316,6 +4406,10 @@ namespace Arena.Presentation
                 return;
 
             AnimatorStateInfo state = _animator.GetCurrentAnimatorStateInfo(0);
+            // Landing is driven by clip contact time, not state elapsed time;
+            // anticipation may have been active well before touching down.
+            if (IsLandingState(state.shortNameHash))
+                return;
             if (!TryResolveLocomotionRecovery(
                     state.shortNameHash,
                     _inCombat,
@@ -4717,7 +4811,6 @@ namespace Arena.Presentation
             if (_animator == null) return;
 
             bool jumpStarted = _wasGrounded && !grounded;
-            bool landed = !_wasGrounded && grounded;
             Vector2 jumpLatchDirection = ResolveJumpLatchDirection(locomotion);
 
             if (locomotion.IsMoving)
@@ -4730,13 +4823,10 @@ namespace Arena.Presentation
             if (jumpStarted)
             {
                 LatchJumpDirection(jumpLatchDirection);
-                ForceDirectionalJumpRestartIfNeeded();
             }
 
-            if (landed)
-            {
-                LatchJumpDirection(jumpLatchDirection);
-            }
+            // Keep the clip direction through anticipation and contact. A new
+            // latch at touchdown would change the pose being blended out of.
 
             _wasMoving = locomotion.IsMoving;
             _lastFacingYawDegrees = locomotion.facingYawDegrees;
@@ -4814,13 +4904,6 @@ namespace Arena.Presentation
 
             if (!grounded || !isMoving)
                 return false;
-
-            if (stateHash == JumpLandStateHash || stateHash == JumpLandCombatStateHash)
-            {
-                targetStateHash = inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
-                minNormalizedTime = LandingRecoveryMinNormalizedTime;
-                return true;
-            }
 
             if (stateHash == DodgeStateHash)
             {

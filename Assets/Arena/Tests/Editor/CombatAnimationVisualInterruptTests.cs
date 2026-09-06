@@ -214,6 +214,8 @@ namespace Arena.Tests.Editor
                 animator.SetBool("InCombat", inCombat);
                 animator.SetBool("Grounded", false);
                 animator.SetBool("FreeFall", true);
+                animator.SetBool("Falling", true);
+                animator.SetFloat("JumpPhase", 0.999f);
                 animator.SetFloat("JumpZ", 1f);
 
                 string start = inCombat ? "JumpStartCombat" : "JumpStart";
@@ -221,8 +223,8 @@ namespace Arena.Tests.Editor
                 int landHash = Animator.StringToHash(inCombat ? "JumpLandCombat" : "JumpLand");
                 float deltaTime = 1f / frameRate;
                 // A running jump can touch down during the 80 ms blend from
-                // the takeoff clip to the airborne loop. Cross the authored
-                // exit time so this exercises the controller's real transition.
+                // takeoff to falling. The phase is driven by upward velocity;
+                // falling starts at the apex regardless of clip elapsed time.
                 animator.Play(start, 0, 0.77f);
                 animator.Update(0f);
                 for (int frame = 0; frame < frameRate && !animator.IsInTransition(0); frame++)
@@ -233,6 +235,7 @@ namespace Arena.Tests.Editor
 
                 animator.SetBool("Grounded", true);
                 animator.SetBool("FreeFall", false);
+                animator.SetBool("Landing", true);
                 animator.Update(deltaTime);
 
                 int activeDestination = animator.IsInTransition(0)

@@ -138,6 +138,42 @@ namespace Arena.Input
         }
         public Vector3 CurrentPredictedPosition => _hasCurrentPredictedState ? _currentPredictedState.Position : transform.position;
 
+        /// <summary>
+        /// Reads the same interpolation interval used to display the local
+        /// character. Forecasting here never appends input, advances prediction,
+        /// or changes the gameplay grounded flag.
+        /// </summary>
+        public bool TryGetJumpAnimationSample(out PredictedMovementState sample, out float? landingInSeconds)
+        {
+            sample = default;
+            landingInSeconds = null;
+            if (!_hasCurrentPredictedState || _renderHistoryCount == 0 || _environment == null
+                || (_simState != null && _simState.TryGetSpecialMovementTrack(out _)))
+                return false;
+
+            PredictedMovementState newest = GetRenderHistorySample(_renderHistoryCount - 1);
+            float alpha = FixedTickAlpha;
+            sample = _renderHistoryCount == 1 ? newest : JumpAnimationPrediction.Interpolate(
+                GetRenderHistorySample(_renderHistoryCount - 2), newest, alpha);
+            if (sample.Grounded)
+            {
+                landingInSeconds = 0f;
+                return true;
+            }
+
+            float toHeadSeconds = _renderHistoryCount > 1
+                ? (1f - alpha) * MovementNetcodeConfig.FixedTickSeconds : 0f;
+            if (newest.Grounded)
+                landingInSeconds = toHeadSeconds;
+            else if (sample.Velocity.y <= 0f && JumpAnimationPrediction.TryFindLanding(
+                newest, new MovementStepContext(_effectiveMovementBlocked, _effectiveMoveSpeedMultiplier,
+                    _motor != null ? _motor.HitRadius : MovementPrediction.DefaultHitRadius,
+                    _motor != null ? _motor.HitHeight : MovementPrediction.DefaultHitHeight), _environment,
+                JumpAnimationPrediction.LookAheadSeconds, out float seconds))
+                landingInSeconds = toHeadSeconds + seconds;
+            return true;
+        }
+
         public void Initialize(
             ClientSimulationState simState,
             LocalPlayerMotor motor,
