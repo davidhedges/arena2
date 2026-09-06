@@ -948,13 +948,7 @@ fn sync_fixed_action_charge_state(
     let (max_charges, recharge_duration_ms) =
         fixed_action_charge_config_for_owner(ctx, row.owner, row.action_id.as_str());
     let recharge_duration_ms = recharge_duration_ms.max(1);
-    let mut recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
-    if recoveries.is_empty() && row.current_charges < max_charges {
-        for timing in legacy_charge_recovery_timings(&row, max_charges, recharge_duration_ms, now) {
-            insert_fixed_action_charge_recovery(ctx, row.owner, row.action_id.as_str(), timing);
-        }
-        recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
-    }
+    let recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
 
     let mut pending = Vec::with_capacity(recoveries.len());
     for recovery in recoveries {
@@ -1173,35 +1167,6 @@ fn charge_recovery_timing(now: Timestamp, recharge_duration_ms: u64) -> ChargeRe
         recharge_started_at: now,
         ready_at: now + Duration::from_millis(recharge_duration_ms.max(1)),
     }
-}
-
-fn legacy_charge_recovery_timings(
-    row: &FixedActionChargeState,
-    max_charges: u32,
-    recharge_duration_ms: u64,
-    now: Timestamp,
-) -> Vec<ChargeRecoveryTiming> {
-    let missing_charges = max_charges.saturating_sub(row.current_charges.min(max_charges));
-    if missing_charges == 0 {
-        return Vec::new();
-    }
-
-    let recharge_duration_ms = recharge_duration_ms.max(1);
-    let first_ready_at = if row.is_recharging && row.next_charge_ready_at > Timestamp::UNIX_EPOCH {
-        row.next_charge_ready_at
-    } else {
-        now + Duration::from_millis(recharge_duration_ms)
-    };
-    (0..missing_charges)
-        .map(|offset| {
-            let ready_at = first_ready_at
-                + Duration::from_millis(recharge_duration_ms.saturating_mul(offset as u64));
-            ChargeRecoveryTiming {
-                recharge_started_at: ready_at - Duration::from_millis(recharge_duration_ms),
-                ready_at,
-            }
-        })
-        .collect()
 }
 
 fn summarize_charge_progress(
@@ -1494,21 +1459,6 @@ mod tests {
         assert_eq!(state.current_charges, 0);
         assert_eq!(state.recharge_started_at, ts(0));
         assert_eq!(state.next_charge_ready_at, ts(10_000));
-    }
-
-    #[test]
-    fn legacy_sequential_state_migrates_without_losing_missing_charges() {
-        let mut row = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
-        row.current_charges = row.max_charges - 3;
-        row.is_recharging = true;
-        row.recharge_started_at = ts(1_000);
-        row.next_charge_ready_at = ts(11_000);
-
-        let recoveries = legacy_charge_recovery_timings(&row, row.max_charges, 10_000, ts(2_000));
-        assert_eq!(recoveries.len(), 3);
-        assert_eq!(recoveries[0].ready_at, ts(11_000));
-        assert_eq!(recoveries[1].ready_at, ts(21_000));
-        assert_eq!(recoveries[2].ready_at, ts(31_000));
     }
 
     #[test]
