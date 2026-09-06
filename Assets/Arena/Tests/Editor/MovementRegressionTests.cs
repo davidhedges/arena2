@@ -224,14 +224,36 @@ namespace Arena.Tests.Editor
                 typeof(float),
                 typeof(float).MakeByRefType());
 
-            object[] lowerFloorArgs = { 7.3333335f, -3.3333333f, -8.0f, 0.0f };
+            // The bundled dungeon is regenerated. Use its independent planned
+            // floor artifact instead of coordinates from an obsolete layout.
+            var surfaces = JsonUtility.FromJson<NavigationFixture>(File.ReadAllText(
+                "Assets/Arena/Resources/SharedData/Worlds/random_dungeon.navsurfaces.shared.json"));
+            NavigationFloor floor = surfaces.nodes
+                .Where(node => node.kind == "Floor" && node.world_center[1] < 0f)
+                .OrderBy(node => node.world_center[1]).ThenBy(node => node.id, StringComparer.Ordinal)
+                .First();
+            object[] lowerFloorArgs = { floor.world_center[0], floor.world_center[2], floor.world_center[1], 0.0f };
             bool foundLowerFloor = (bool)trySample.Invoke(environment, lowerFloorArgs)!;
             Assert.That(foundLowerFloor, Is.True);
-            Assert.That((float)lowerFloorArgs[3], Is.EqualTo(-8.0f).Within(0.01f));
+            Assert.That((float)lowerFloorArgs[3], Is.EqualTo(floor.world_center[1]).Within(0.01f), floor.id);
 
             object[] emptySpaceArgs = { 10_000.0f, 10_000.0f, 0.0f, 0.0f };
             bool foundSyntheticPlane = (bool)trySample.Invoke(environment, emptySpaceArgs)!;
             Assert.That(foundSyntheticPlane, Is.False);
+        }
+
+        [Serializable]
+        private sealed class NavigationFixture
+        {
+            public NavigationFloor[] nodes = Array.Empty<NavigationFloor>();
+        }
+
+        [Serializable]
+        private sealed class NavigationFloor
+        {
+            public string id = string.Empty;
+            public string kind = string.Empty;
+            public float[] world_center = Array.Empty<float>();
         }
 
         private static string ProjectPath(string relativePath)

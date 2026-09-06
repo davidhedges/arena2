@@ -175,67 +175,86 @@ namespace Arena.EditModeTests
         [Test]
         public void ReplicatedClosedDoor_BlocksPredictionAndLineQueries()
         {
-            const string doorId = "RANDOM_DUNGEON:GATEWAY:15:26:4";
+            JObject manifest = JObject.Parse(Resources.Load<TextAsset>(
+                "SharedData/Worlds/random_dungeon.doors.shared").text);
+            var doors = (JArray)manifest["doors"]!;
+            Assert.That(doors.Count, Is.GreaterThan(0));
             WorldDoorCollisionRuntime.Clear();
             WorldDoorCollisionRuntime.SetScope("OPEN", "RandomDungeon");
             try
             {
-                Assert.That(
-                    WorldDoorCollisionRuntime.TryGetEffectiveState(
+                foreach (JToken door in doors)
+                {
+                    string doorId = door["door_definition_id"]!.Value<string>()!;
+                    JToken blocker = door["closed_blocker"]!;
+                    Vector3 center = Vector(blocker["center"]!);
+                    Vector3 size = Vector(blocker["size"]!);
+                    Vector3 normal = Quaternion.Euler(0f, blocker["yaw_degrees"]!.Value<float>(), 0f) * Vector3.forward;
+                    Vector3 start = center - normal * 2f;
+                    Vector3 end = center + normal * 2f;
+                    float footY = center.y - size.y * 0.5f + 0.1f;
+                    Assert.That(
+                        WorldDoorCollisionRuntime.TryGetEffectiveState(
+                            doorId,
+                            out bool defaultOpen,
+                            out ulong defaultRevision),
+                        Is.True);
+                    Assert.That(defaultOpen, Is.True);
+                    Assert.That(defaultRevision, Is.Zero);
+
+                    var closed = new WorldDoorState(
+                        $"OPEN:RandomDungeon:{doorId}",
                         doorId,
-                        out bool defaultOpen,
-                        out ulong defaultRevision),
-                    Is.True);
-                Assert.That(defaultOpen, Is.True);
-                Assert.That(defaultRevision, Is.Zero);
+                        "OPEN",
+                        null,
+                        0UL,
+                        "RandomDungeon",
+                        false,
+                        1,
+                        new SpacetimeDB.Timestamp(0));
+                    WorldDoorCollisionRuntime.Upsert(closed);
 
-                var closed = new WorldDoorState(
-                    $"OPEN:RandomDungeon:{doorId}",
-                    doorId,
-                    "OPEN",
-                    null,
-                    0UL,
-                    "RandomDungeon",
-                    false,
-                    1,
-                    new SpacetimeDB.Timestamp(0));
-                WorldDoorCollisionRuntime.Upsert(closed);
+                    Vector2 blocked = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                        start.x,
+                        start.z,
+                        end.x,
+                        end.z,
+                        0.25f,
+                        1.8f,
+                        footY);
+                    Assert.That(Vector2.Distance(blocked, new Vector2(start.x, start.z)), Is.LessThan(2f), doorId);
+                    Assert.That(
+                        WorldDoorCollisionRuntime.TryFindFirstLineHitDistance(
+                            start,
+                            end,
+                            0.05f,
+                            out float hitDistance),
+                        Is.True);
+                    Assert.That(hitDistance, Is.LessThan(2f));
 
-                Vector2 blocked = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
-                    -24f,
-                    12f,
-                    -24f,
-                    16f,
-                    0.25f,
-                    1.8f,
-                    20f);
-                Assert.That(blocked.y, Is.LessThan(14f));
-                Assert.That(
-                    WorldDoorCollisionRuntime.TryFindFirstLineHitDistance(
-                        new Vector3(-24f, 21.2f, 12f),
-                        new Vector3(-24f, 21.2f, 16f),
-                        0.05f,
-                        out float hitDistance),
-                    Is.True);
-                Assert.That(hitDistance, Is.LessThan(2f));
-
-                closed.IsOpen = true;
-                closed.Revision = 2;
-                WorldDoorCollisionRuntime.Upsert(closed);
-                Vector2 open = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
-                    -24f,
-                    12f,
-                    -24f,
-                    16f,
-                    0.25f,
-                    1.8f,
-                    20f);
-                Assert.That(open, Is.EqualTo(new Vector2(-24f, 16f)));
+                    closed.IsOpen = true;
+                    closed.Revision = 2;
+                    WorldDoorCollisionRuntime.Upsert(closed);
+                    Vector2 open = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                        start.x,
+                        start.z,
+                        end.x,
+                        end.z,
+                        0.25f,
+                        1.8f,
+                        footY);
+                    Assert.That(open, Is.EqualTo(new Vector2(end.x, end.z)), doorId);
+                    Assert.That(WorldDoorCollisionRuntime.TryFindFirstLineHitDistance(
+                        start, end, 0.05f, out _), Is.False, doorId);
+                }
             }
             finally
             {
                 WorldDoorCollisionRuntime.Clear();
             }
+
+            static Vector3 Vector(JToken value) => new(
+                value["x"]!.Value<float>(), value["y"]!.Value<float>(), value["z"]!.Value<float>());
         }
 
         private static GameObject CreateDoor(string name)

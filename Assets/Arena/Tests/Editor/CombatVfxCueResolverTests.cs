@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -133,12 +134,34 @@ namespace Arena.Tests.Editor
         [Test]
         public void PhotosynthesisVfx_ScalesOnlyTheAuthoredLeafFlecksWithStacks()
         {
-            const string path = "Assets/Arena/Runtime/Presentation/VFX/PhotosynthesisVFX.cs";
-            string source = File.ReadAllText(path);
-
-            Assert.That(source, Does.Contain("Flecks_Shiny_Additive"));
-            Assert.That(source, Does.Contain("Mathf.Clamp((int)context.SequenceCount, 1, MaxStacks)"));
-            Assert.That(source, Does.Contain("main.maxParticles = LeavesPerStack * stacks"));
+            var root = new GameObject("PhotosynthesisTest");
+            try
+            {
+                var leaf = new GameObject("Flecks_Shiny_Additive");
+                leaf.transform.SetParent(root.transform);
+                ParticleSystem leaves = leaf.AddComponent<ParticleSystem>();
+                var aura = new GameObject("AuthoredAura");
+                aura.transform.SetParent(root.transform);
+                ParticleSystem background = aura.AddComponent<ParticleSystem>();
+                var backgroundMain = background.main;
+                backgroundMain.maxParticles = 37;
+                float originalLifetime = leaves.main.startLifetime.constant;
+                float originalSpeed = leaves.main.startSpeed.constant;
+                Type effect = AppDomain.CurrentDomain.Load("Assembly-CSharp")
+                    .GetType("Arena.Presentation.VFX.PhotosynthesisVFX", true)!;
+                MethodInfo configure = effect.GetMethod("ConfigureLeafCount",
+                    BindingFlags.Static | BindingFlags.NonPublic)!;
+                foreach (int stacks in new[] { 0, 1, 3, 5, 10 })
+                {
+                    Assert.That(configure.Invoke(null, new object[] { root, stacks }), Is.EqualTo(1));
+                    Assert.That(leaves.main.maxParticles, Is.EqualTo(Mathf.Clamp(stacks, 1, 5)));
+                    Assert.That(leaves.emission.rateOverTime.constant, Is.GreaterThanOrEqualTo(240f));
+                    Assert.That(leaves.main.startLifetime.constant, Is.EqualTo(originalLifetime));
+                    Assert.That(leaves.main.startSpeed.constant, Is.EqualTo(originalSpeed));
+                    Assert.That(background.main.maxParticles, Is.EqualTo(37));
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
         }
 
         [Test]

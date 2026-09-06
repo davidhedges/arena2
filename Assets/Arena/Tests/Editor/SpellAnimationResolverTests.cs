@@ -267,31 +267,49 @@ namespace Arena.Tests.Editor
         {
             foreach ((string motion, string[] spellIds) in new[]
                      {
-                         ("Direct2H", new[] { "ICICLE", "FIREBALL", "SMITE" }),
+                         ("Direct2H", new[] { "FIREBALL", "SMITE" }),
                          ("Direct1H", new[]
                          {
                              "PLAGUEBOLT", "EARTH_BLAST", "LAVA_BLAST", "TIDAL_BLAST",
-                             "WIND_BLAST", "BOLT", "CAPACITOR", "CAUTERIZE", "BUFFET",
+                             "WIND_BLAST", "CAUTERIZE",
                              "FLASHFIRE", "FLASH_FREEZE", "DEEPENING_COLD", "FULMINATION",
-                             "VAMPIRIC_ORB", "WITHERING_ORB",
+                             "VAMPIRIC_ORB",
                          }),
-                         ("Call", new[] { "CLOUDBURST" }),
                          ("Raise", new[]
                          {
                              "GIGANTISM", "FLURRY", "OVERGROWTH", "WELLSPRING", "NECRO_PRISON",
-                             "NECROTIC_AURA", "GRAVEBURST", "GRAVEWAKE", "DEFILED_GROUND",
-                             "BENEDICTION", "DIVINE_MEND", "FLASH_OF_GRACE", "RESTORATION",
+                             "NECROTIC_AURA",
+                             "BENEDICTION", "FLASH_OF_GRACE", "RESTORATION",
                              "SANCTUARY", "VERDANT_SPIRITS", "TAILWIND",
                          }),
-                         ("Ground", new[] { "EARTHQUAKE", "FISSURE", "BLIZZARD" }),
+                         ("Ground", new[] { "BLIZZARD" }),
                      })
             {
                 foreach (string spellId in spellIds)
                     Assert.That(MotionFor(spellId), Is.EqualTo(motion), spellId);
             }
 
-            Assert.That(AssignmentFor("FLAMING_ORB"), Is.EqualTo("Catalog"));
-            Assert.That(AnimationIdFor("FLAMING_ORB"), Is.EqualTo("MAGE_PROJECTILE_CAST_02"));
+            foreach ((string spell, string recipe) in new[]
+            {
+                ("ICICLE", "MAGE_AIMED_RELEASE_01"),
+                ("FLAMING_ORB", "MAGE_PROJECTILE_CAST_02"),
+                ("BOLT", "MAGE_COMBO_CAST_04_01"),
+                ("CAPACITOR", "MAGE_COMBO_CAST_01_02"),
+                ("BUFFET", "MAGE_COMBO_CAST_01_01"),
+                ("WITHERING_ORB", "MAGE_COMBO_CAST_01_01"),
+                ("GRAVEBURST", "MAGE_SKILL_CAST_03"),
+                ("GRAVEWAKE", "MAGE_SKILL_CAST_03"),
+                ("DEFILED_GROUND", "MAGE_SKILL_CAST_03"),
+                ("DIVINE_MEND", "LEGACY_CALL_CAST_1H_01_L_CHARGED"),
+                ("CLOUDBURST", "MAGE_SKILL_CAST_05"),
+                ("EARTHQUAKE", "MAGE_SKILL_CAST_04"),
+                ("FISSURE", "MAGE_SKILL_CAST_04"),
+            })
+            {
+                Assert.That(AssignmentFor(spell), Is.EqualTo("Catalog"), spell);
+                Assert.That(AnimationIdFor(spell), Is.EqualTo(recipe), spell);
+                Assert.That(Resolve(LoadSet("TwoHandedSword"), spell, "Charged", out _), Is.True, spell);
+            }
         }
 
         [Test]
@@ -360,9 +378,10 @@ namespace Arena.Tests.Editor
             Assert.That(Resolve(set, "NOT_MAPPED", "Charged", out _), Is.False);
             Assert.That(cache.Count, Is.Zero);
 
-            Assert.That(Resolve(set, "ICICLE", "Charged", out _), Is.True);
+            Assert.That(AssignmentFor("FIREBALL"), Is.EqualTo("LegacyMotion"));
+            Assert.That(Resolve(set, "FIREBALL", "Charged", out _), Is.True);
             Assert.That(cache.Count, Is.EqualTo(1));
-            Assert.That(Resolve(set, "icicle", "Charged", out _), Is.True);
+            Assert.That(Resolve(set, "fireball", "Charged", out _), Is.True);
             Assert.That(cache.Count, Is.EqualTo(1));
 
             invalidate.Invoke(null, null);
@@ -808,13 +827,16 @@ namespace Arena.Tests.Editor
             try
             {
                 object animationOverride = Activator.CreateInstance(overrideType)!;
-                overrideType.GetField("spellId")!.SetValue(animationOverride, "FIREBALL");
+                // PLAGUEBOLT uses a one-hand semantic family. FIREBALL's two-hand
+                // family deliberately leaves its origin to the authored VFX cue.
+                Assert.That(AssignmentFor("PLAGUEBOLT"), Is.EqualTo("LegacyMotion"));
+                overrideType.GetField("spellId")!.SetValue(animationOverride, "PLAGUEBOLT");
                 overrideType.GetField("mirrorPresentation")!.SetValue(animationOverride, true);
                 Array overrides = Array.CreateInstance(overrideType, 1);
                 overrides.SetValue(animationOverride, 0);
                 setType.GetField("spellCastAnimationOverrides")!.SetValue(set, overrides);
 
-                Assert.That(Resolve(set, "FIREBALL", "Charged", out object entry), Is.True);
+                Assert.That(Resolve(set, "PLAGUEBOLT", "Charged", out object entry), Is.True);
                 Assert.That(entryType.GetField("mirrorPresentation")!.GetValue(entry), Is.True);
                 Assert.That(entryType.GetField("castOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("LeftHand"));
                 Assert.That(entryType.GetProperty("EffectiveCastOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("RightHand"));

@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -13,20 +14,33 @@ namespace Arena.Tests.Editor
     {
         private const BindingFlags StaticMembers =
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private const BindingFlags InstanceMembers =
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
         [Test]
         public void EditorModel_RetainsDormantFeaturesAndReflowsActiveScopes()
         {
-            string editor = File.ReadAllText(
-                "Assets/Arena/Runtime/Network/CombatBuildV2EditorModel.cs");
-
-            Assert.That(editor, Does.Contain("_dormantSpecializationIds"));
-            Assert.That(editor, Does.Contain("_dormantSpecializationIds.Add(specializationId)"));
-            Assert.That(editor, Does.Contain("_dormantSpecializationIds.Remove(specializationId)"));
-            Assert.That(editor, Does.Contain("ReflowAllActiveScopes"));
-            Assert.That(editor, Does.Contain("ActiveSelectionsInScope"));
-            Assert.That(editor, Does.Contain("SelectedFeatureCount"));
-            Assert.That(editor, Does.Contain("EmptySpecialization"));
+            object editor = CreateEditor();
+            Assert.That(Call(editor, "SetFeatureSelected", "A1", true), Is.True);
+            Assert.That(Call(editor, "SetFeatureSelected", "B1", true), Is.True);
+            Assert.That(Call(editor, "SetFeatureSelected", "A2", true), Is.True);
+            Assert.That(Call(editor, "RemoveSpecialization", "B"), Is.True);
+            Assert.That(Property(editor, "SelectedFeatureCount"), Is.EqualTo(2));
+            Assert.That((IEnumerable)Property(editor, "DormantSpecializationIds"), Does.Contain("B"));
+            Assert.That(Call(editor, "IsFeatureSelected", "B1"), Is.True);
+            object[] active = ((IEnumerable)Property(Call(editor, "ToDraft"), "SelectedFeatures"))
+                .Cast<object>().Where(row => (string)Property(row, "SpecializationId") == "A").ToArray();
+            Assert.That(active.Select(row => Convert.ToInt32(Property(row, "PreferredBarOrder"))),
+                Is.EquivalentTo(new[] { 0, 1 }));
+            Assert.That(Call(editor, "AddSpecialization", "B"), Is.True);
+            Assert.That((IEnumerable)Property(editor, "DormantSpecializationIds"), Does.Not.Contain("B"));
+            Assert.That(Property(editor, "SelectedFeatureCount"), Is.EqualTo(3));
+            object[] restored = ((IEnumerable)Property(Call(editor, "ToDraft"), "SelectedFeatures"))
+                .Cast<object>().ToArray();
+            Assert.That(restored.Select(row => (string)Property(row, "AbilityId")),
+                Is.EquivalentTo(new[] { "A1", "A2", "B1" }));
+            Assert.That(restored.Select(row => Convert.ToInt32(Property(row, "PreferredBarOrder"))),
+                Is.EquivalentTo(new[] { 0, 1, 2 }));
         }
 
         [Test]
@@ -67,13 +81,19 @@ namespace Arena.Tests.Editor
         {
             string screen = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
-            string editor = File.ReadAllText(
-                "Assets/Arena/Runtime/Network/CombatBuildV2EditorModel.cs");
-
             Assert.That(screen, Does.Contain("_model.CanSubmit"));
             Assert.That(screen, Does.Contain("LocalSubmissionIssues"));
-            Assert.That(editor, Does.Contain("Select at least one Feature for"));
-            Assert.That(editor, Does.Contain("CanSubmit => LocalSubmissionIssues().Count == 0"));
+            object editor = CreateEditor();
+            Assert.That(Property(editor, "CanSubmit"), Is.False);
+            Assert.That(((IEnumerable)Call(editor, "LocalSubmissionIssues")).Cast<string>(),
+                Has.Some.Contains("at least one feature"));
+            Call(editor, "SetFeatureSelected", "A1", true);
+            Assert.That(Property(editor, "CanSubmit"), Is.False, "Every selected form needs a feature.");
+            Call(editor, "SetFeatureSelected", "B1", true);
+            Assert.That(Property(editor, "CanSubmit"), Is.True);
+            Assert.That((IEnumerable)Call(editor, "LocalSubmissionIssues"), Is.Empty);
+            Call(editor, "SetFeatureSelected", "B1", false);
+            Assert.That(Property(editor, "CanSubmit"), Is.False);
         }
 
         [Test]
@@ -133,6 +153,44 @@ namespace Arena.Tests.Editor
             Assert.That(network, Does.Not.Contain("From.MyCombatBuild().ToSql()"));
             Assert.That(hub, Does.Contain("sync_combat_build_v2_catalogs"));
         }
+
+        private static object CreateEditor()
+        {
+            object form = Enum.Parse(RuntimeType("Arena.Network.CombatSpecializationKindV2"), "Form");
+            object technique = Enum.Parse(RuntimeType("Arena.Network.CombatFeatureLoadoutKindV2"), "Technique");
+            object Specialization(string id) => New("CombatSpecializationDefinitionV2Model", id, "DAGGERS", form, id, 0U);
+            object Feature(string id, string owner) => New("CombatFeatureDefinitionV2Model", id, owner, "DAGGERS", technique, id, "STAMINA", 0f, 0U);
+            object catalog = New("CombatBuildV2CatalogModel",
+                Rows("CombatSpecializationDefinitionV2Model", Specialization("A"), Specialization("B")),
+                Rows("CombatFeatureDefinitionV2Model", Feature("A1", "A"), Feature("A2", "A"), Feature("B1", "B")),
+                Rows("CombatTraitDefinitionV2Model"));
+            object draft = New("CombatBuildV2DraftModel", 2U, 1UL, "DAGGERS",
+                Rows("CombatBuildV2SelectedSpecializationModel",
+                    New("CombatBuildV2SelectedSpecializationModel", (byte)0, "A"),
+                    New("CombatBuildV2SelectedSpecializationModel", (byte)1, "B")),
+                Array.Empty<string>(),
+                Rows("CombatBuildV2DisciplineConfigurationModel", New("CombatBuildV2DisciplineConfigurationModel",
+                    "DAGGERS", "TRAINING_DAGGER_PAIR", "", "", "")),
+                Rows("CombatBuildV2FeatureSelectionModel"), Array.Empty<string>());
+            object contract = New("CombatBuildV2ContractModel", 2U, 1, 3, 18, 1, Array.Empty<string>());
+            return New("CombatBuildV2EditorModel", draft, catalog, contract);
+        }
+
+        private static object New(string name, params object[] args)
+            => Activator.CreateInstance(RuntimeType("Arena.Network." + name), InstanceMembers, null, args, null)!;
+
+        private static Array Rows(string name, params object[] rows)
+        {
+            Array array = Array.CreateInstance(RuntimeType("Arena.Network." + name), rows.Length);
+            for (int index = 0; index < rows.Length; index++) array.SetValue(rows[index], index);
+            return array;
+        }
+
+        private static object Call(object target, string name, params object[] args)
+            => target.GetType().GetMethod(name, InstanceMembers)!.Invoke(target, args)!;
+
+        private static object Property(object target, string name)
+            => target.GetType().GetProperty(name, InstanceMembers)!.GetValue(target)!;
 
         private static Type RuntimeType(string typeName)
             => AppDomain.CurrentDomain.Load("Assembly-CSharp")

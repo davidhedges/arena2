@@ -1575,7 +1575,11 @@ namespace Arena.Tests.Editor
                 typeof(Vector3?),
                 typeof(string),
                 typeof(string),
-                typeof(bool));
+                typeof(bool),
+                typeof(bool),
+                typeof(bool),
+                typeof(float),
+                RequireRuntimeType("Arena.Presentation.CombatAnimationVfxBinding").MakeArrayType());
 
             return method.Invoke(
                 null,
@@ -1589,6 +1593,10 @@ namespace Arena.Tests.Editor
                     null,
                     null,
                     false,
+                    false,
+                    false,
+                    -1f,
+                    null,
                 })!;
         }
 

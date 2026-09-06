@@ -463,8 +463,9 @@ namespace Arena.Tests.Editor
             foreach (string side in new[] { "North", "East", "South", "West" })
                 Assert.That(scene, Does.Contain($"m_Name: Level Entrance {side}"));
 
-            Assert.That(scene, Does.Not.Contain("m_Shadows:\n    m_Type: 1"));
-            Assert.That(scene, Does.Not.Contain("m_Shadows:\n    m_Type: 2"));
+            // Shadows are budgeted at runtime per entrance and graphics setting;
+            // other authored scene lights can legitimately retain shadows.
+            AssertEntranceLightBudget();
             Assert.That(CountOccurrences(scene, "  m_Enabled: 0\n"), Is.EqualTo(56));
             Assert.That(
                 CountOccurrences(scene, "guid: 8ab8340ffd685fb479daac555f516852"),
@@ -504,9 +505,12 @@ namespace Arena.Tests.Editor
                 "Assets/Arena/Resources/SharedData/Maps/arena_map_01.query_collision.shared.json");
             Assert.That(clientCollision, Is.EqualTo(serverCollision));
             Assert.That(clientQueryCollision, Is.EqualTo(serverQueryCollision));
-            Assert.That(serverCollision, Does.Contain("\"boxes\": []"));
-            Assert.That(serverQueryCollision, Does.Contain("\"boxes\": []"));
-            Assert.That(serverCollision, Does.Contain("\"source_revision\": \"83d8801b"));
+            Assert.That(System.Text.RegularExpressions.Regex.Replace(serverCollision, @"\s+", ""),
+                Does.Contain("\"boxes\":[]"));
+            Assert.That(System.Text.RegularExpressions.Regex.Replace(serverQueryCollision, @"\s+", ""),
+                Does.Contain("\"boxes\":[]"));
+            Assert.That(System.Text.RegularExpressions.Regex.Replace(serverCollision, @"\s+", ""),
+                Does.Contain("\"source_revision\":\"83d8801b"));
             Assert.That(File.Exists("server/src/arena_layout.shared.json"), Is.False);
             Assert.That(File.Exists("server/src/gameplay_collision.shared.json"), Is.False);
             Assert.That(File.Exists("server/src/gameplay_query_collision.shared.json"), Is.False);
@@ -859,7 +863,10 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(31));
+            Assert.That(localSql, Has.Length.EqualTo(33));
+            Assert.That(localSql.Distinct().Count(), Is.EqualTo(localSql.Length));
+            Assert.That(localSqlText, Does.Contain("\"capacitor_state\""));
+            Assert.That(localSqlText, Does.Contain("\"active_dice_roll\""));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -924,7 +931,9 @@ namespace Arena.Tests.Editor
 
             string sql = string.Join("\n", initialSql.Concat(scopedSql));
             string initialSqlText = string.Join("\n", initialSql);
-            Assert.That(initialSql, Has.Length.EqualTo(47));
+            Assert.That(initialSql, Has.Length.EqualTo(44));
+            Assert.That(initialSql.Distinct().Count(), Is.EqualTo(initialSql.Length));
+            Assert.That(initialSqlText, Does.Contain("\"capacitor_state\""));
             foreach (string unavailableTable in new[]
                      {
                          "party",
@@ -1726,7 +1735,7 @@ namespace Arena.Tests.Editor
             Type projectileEventType = RequireRuntimeType("SpacetimeDB.Types.ProjectilePresentationEvent");
             object row = Activator.CreateInstance(projectileEventType)!;
             SetField(row, "SourceKind", "SPELL");
-            SetField(row, "EventType", "CONTACT");
+            SetField(row, "EventType", "COMBAT_CONTACT");
             SetField(row, "Terminal", false);
             SetField(row, "Damage", 5);
 
@@ -1744,6 +1753,11 @@ namespace Arena.Tests.Editor
             SetField(row, "Damage", 5);
             SetField(row, "Terminal", true);
             Assert.That(predicate.Invoke(null, new[] { row }), Is.False);
+
+            SetField(row, "Terminal", false);
+            SetField(row, "EventType", "CONTACT");
+            Assert.That(predicate.Invoke(null, new[] { row }), Is.False,
+                "The old untyped contact spelling is not a current presentation event.");
         }
 
         [Test]
@@ -1956,6 +1970,75 @@ namespace Arena.Tests.Editor
                 sortOrder)!;
         }
 
+        private static void AssertEntranceLightBudget()
+        {
+            Type settings = RequireRuntimeType("Arena.Graphics.ArenaGraphicsSettings");
+            Type qualityType = RequireRuntimeType("Arena.Graphics.ArenaLightShadowQuality");
+            const BindingFlags fields = BindingFlags.Static | BindingFlags.NonPublic;
+            FieldInfo loaded = settings.GetField("s_loaded", fields)!;
+            FieldInfo quality = settings.GetField("s_lightShadowQuality", fields)!;
+            object previousLoaded = loaded.GetValue(null)!;
+            object previousQuality = quality.GetValue(null)!;
+            var existingLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include)
+                .ToDictionary(light => light, light => (light.shadows, light.intensity));
+            var existingAnimators = UnityEngine.Object.FindObjectsByType<Animator>(FindObjectsInactive.Include)
+                .ToDictionary(animator => animator, animator => animator.enabled);
+            var testRoot = new GameObject("LightingBudgetTestRoot");
+            Type budgetType = RequireRuntimeType("Arena.World.ArenaMap01LightingBudget");
+            Component? budget = null;
+            try
+            {
+                loaded.SetValue(null, true); // Do not read or write the user's graphics preferences.
+                quality.SetValue(null, Enum.Parse(qualityType, "Off"));
+                var lights = new List<Light>();
+                foreach (string side in new[] { "North", "East", "South", "West" })
+                {
+                    var entrance = new GameObject("Level Entrance Test " + side);
+                    entrance.transform.SetParent(testRoot.transform);
+                    for (int index = 0; index < 2; index++)
+                    {
+                        var fixture = new GameObject("Fixture");
+                        fixture.transform.SetParent(entrance.transform);
+                        fixture.transform.localPosition = Vector3.right * (index + 1);
+                        Light light = fixture.AddComponent<Light>();
+                        light.type = LightType.Point;
+                        light.shadows = LightShadows.Hard;
+                        lights.Add(light);
+                    }
+                }
+                Light unrelated = new GameObject("Other light").AddComponent<Light>();
+                unrelated.transform.SetParent(testRoot.transform);
+                unrelated.type = LightType.Point;
+                unrelated.shadows = LightShadows.Hard;
+                var owner = new GameObject("LightingBudgetTest");
+                owner.transform.SetParent(testRoot.transform);
+                owner.SetActive(false);
+                budget = owner.AddComponent(budgetType);
+                RequireMethod(budgetType, "Awake").Invoke(budget, null);
+                Assert.That(lights.All(light => light.shadows == LightShadows.None), Is.True);
+                quality.SetValue(null, Enum.Parse(qualityType, "Hero"));
+                RequireMethod(budgetType, "ApplyLightShadowQuality").Invoke(budget, null);
+                Assert.That(lights.Count(light => light.shadows == LightShadows.Soft), Is.EqualTo(4));
+                Assert.That(lights.Count(light => light.shadows == LightShadows.None), Is.EqualTo(4));
+                Assert.That(unrelated.shadows, Is.EqualTo(LightShadows.Hard));
+            }
+            finally
+            {
+                if (budget != null) RequireMethod(budgetType, "OnDestroy").Invoke(budget, null);
+                quality.SetValue(null, previousQuality);
+                loaded.SetValue(null, previousLoaded);
+                UnityEngine.Object.DestroyImmediate(testRoot);
+                foreach (var pair in existingLights)
+                {
+                    if (pair.Key == null) continue;
+                    pair.Key.shadows = pair.Value.shadows;
+                    pair.Key.intensity = pair.Value.intensity;
+                }
+                foreach (var pair in existingAnimators)
+                    if (pair.Key != null) pair.Key.enabled = pair.Value;
+            }
+        }
+
         private static string[] ResolveCombatVfxCueIds(params object[] cues)
             => ResolveCombatVfxCueIds("SPELL_CAST", cues);
 
@@ -1980,7 +2063,8 @@ namespace Arena.Tests.Editor
         {
             Type cueType = RequireRuntimeType("SpacetimeDB.Types.CombatVfxCueCatalog");
             Type factType = RequireRuntimeType("Arena.Presentation.CombatVfxResolutionFact");
-            Type resolverType = RequireRuntimeType("Arena.Presentation.CombatVfxCueResolver");
+            Type resolverType = RequireRuntimeType("Arena.Presentation.CombatVfxCueResolver+Index");
+            object resolver = Activator.CreateInstance(resolverType, nonPublic: true)!;
             object fact = Activator.CreateInstance(
                 factType,
                 isSpell,
@@ -1998,7 +2082,7 @@ namespace Arena.Tests.Editor
                     typeof(IEnumerable<>).MakeGenericType(cueType),
                     factType,
                     listType)
-                .Invoke(null, new[] { CreateArray(cueType, cues), fact, output });
+                .Invoke(resolver, new[] { CreateArray(cueType, cues), fact, output });
 
             var result = new List<string>();
             foreach (object cue in (IEnumerable)output)

@@ -44,13 +44,13 @@ namespace Arena.Tests.Editor
         private const string NegateVfxPath = "Assets/Arena/Runtime/Presentation/VFX/NegateVFX.cs";
         private const string BeamVfxPath = "Assets/Arena/Runtime/Presentation/VFX/BeamVFX.cs";
         private const string FrostNovaPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_DebuffAoE02_Ice_Arena.prefab.meta";
-        private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
-        private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
+        private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Arcane/Arcane Explosion.prefab.meta";
+        private const string NovaHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Arcane/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
         private const string PrimalFourElementsForwardPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Druid 1/ARPG_Druid_Four_Elements_Forward.prefab.meta";
         private const string VerdantSpiritsPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Druid 1/ARPG_Druid_Nature_Spirits.prefab.meta";
         private const string VerdantSpiritsVfxPath = "Assets/Arena/Runtime/Presentation/VFX/VerdantSpiritsVFX.cs";
-        private const string LingeringShadeReturnPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Ink Spells 1/shadow_in.prefab.meta";
+        private const string LingeringShadeReturnPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/rogue/shadow_in.prefab.meta";
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Electric/8) Vertical Lightning blue 1.prefab.meta";
         private const string NegateArcaneShockPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/ARPG Realistic Arcane 1/Simple/ARPG_Arcane_Shock_Calling.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
@@ -139,7 +139,8 @@ namespace Arena.Tests.Editor
         {
             string source = File.ReadAllText(MeleeInputHandlerPath);
 
-            Assert.That(source, Does.Contain("NotifyGapCloseMaximumRangeDenial(gapClose, slotId, pressedActionId);"));
+            Assert.That(source, Does.Match(
+                @"return RejectLocalMeleeAction\(\s*slotId,\s*pressedActionId,\s*ActionRejectReason.OutOfRange,\s*trace,\s*notifyUser: gapClose != null\)"));
             Assert.That(source, Does.Contain("LocalCombatState.NotifyLocalAdvisoryDenial("));
             Assert.That(source, Does.Contain("ActionRejectReason.OutOfRange"));
         }
@@ -549,7 +550,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(spellInput, Does.Contain("ResolveRecallTargetingDefinition"));
             Assert.That(spellInput, Does.Contain("conn.Db.RecallSlot.Owner.Find(owner)"));
-            Assert.That(spellInput, Does.Contain("StartAimMode(spellId, targetingDef.Kind, aimRadius)"));
+            Assert.That(spellInput, Does.Match(@"StartAimMode\(\s*spellId,\s*targetingDef.Kind,\s*aimRadius,"));
             Assert.That(spellInput, Does.Contain("TryCastTargeted(conn, spellId, targetingDef)"));
         }
 
@@ -602,7 +603,7 @@ namespace Arena.Tests.Editor
         public void Hud_RendersFixedActionGridSlots()
         {
             string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("ActionBarKeymap.SelectableBindings"));
+            Assert.That(hud, Does.Contain("DisciplineBarKeymap.SelectableBindings"));
             Assert.That(hud, Does.Contain("ActionTooltipResolver.ResolveForActionRef"));
             Assert.That(hud, Does.Contain("TooltipTarget"));
             Assert.That(hud, Does.Contain("ActionBarInputDispatcher.TryTrigger"));
@@ -635,7 +636,8 @@ namespace Arena.Tests.Editor
 
             string hud = File.ReadAllText(HudControllerPath);
             Assert.That(hud, Does.Contain("ActionBarLayout.IconInset"));
-            Assert.That(hud, Does.Contain("ResolveActiveSelectableAction"));
+            Assert.That(hud, Does.Contain("ResolveSpellBarActions(conn, owner)"));
+            Assert.That(hud, Does.Contain("ResolveTechniqueBarActions(conn, owner)"));
             Assert.That(hud, Does.Contain("ResolveCombatDisciplineSwitchAction"));
             Assert.That(hud, Does.Not.Contain("AssignCharacterActionBar"));
 
@@ -882,7 +884,8 @@ namespace Arena.Tests.Editor
         public void RimedDebuffs_UseAnIcyPaneAndExplainAbilityRemovalProtection()
         {
             string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("HasActiveRime(_tmpDebuff)"));
+            Assert.That(hud, Does.Contain("TryGetRimeProtectedStatusId(se, out ulong protectedStatusId)"));
+            Assert.That(hud, Does.Contain("_tmpRimeProtectedStatusIds.Contains(se.StatusId)"));
             Assert.That(hud, Does.Contain("new GameObject(\"RimedPane\")"));
             Assert.That(hud, Does.Contain("rimeLabel.text = \"RIMED\""));
 
