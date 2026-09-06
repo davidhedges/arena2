@@ -9,6 +9,7 @@ namespace Arena.Editor
 {
     internal sealed partial class SpellAuthoringWindow
     {
+        private readonly Dictionary<string, GlobalCueWritePlan> _globalCuePreviewPlans = new(StringComparer.Ordinal);
         internal sealed class GlobalCueWritePlan
         {
             public readonly List<SpellCueRow> Rows = new();
@@ -109,6 +110,31 @@ namespace Arena.Editor
                 var plan = BuildGlobalCueWritePlan(owner);
                 errors.AddRange(plan.Errors);
                 errors.AddRange(plan.Drift);
+            }
+            return errors;
+        }
+
+        internal List<string> ValidateCueWriteRequest(string expectedCatalog, string abilityId, IReadOnlyList<SpellCueRow> requested)
+        {
+            Load(); // Resolve fresh authoring inputs; a cached preview cannot authorize a write.
+            var errors = new List<string>();
+            if (_loadedCatalogJson != expectedCatalog)
+            {
+                errors.Add("The catalog differs from the current authoring source. Reload before writing.");
+                return errors;
+            }
+            var plan = BuildGlobalCueWritePlan(abilityId);
+            errors.AddRange(plan.Errors);
+            var orders = new HashSet<int>();
+            foreach (var row in requested)
+            {
+                if (!orders.Add(row.SortOrder)) errors.Add("Duplicate requested sort_order: " + row.SortOrder);
+                var matches = plan.Rows.Where(candidate => candidate.SortOrder == row.SortOrder).ToArray();
+                if (matches.Length != 1)
+                    errors.Add($"{abilityId}/{row.Slot}: no validated generated-owned row. Declare ownership before materialization.");
+                else
+                    errors.AddRange(SpellCueCatalogWriter.CompareGeneratedRows(matches[0], row)
+                        .Select(diff => abilityId + "/" + row.Slot + ": preview is stale or differs from current global generation (" + diff + ")."));
             }
             return errors;
         }

@@ -90,6 +90,9 @@ namespace Arena.Editor
                 output = Path.GetFullPath(args[argument + 1]);
             Directory.CreateDirectory(output);
             var report = new Report();
+            // Load assets before the runner attributes import/OnValidate diagnostics to a test.
+            // Existing invalid registry entries remain logged and are inventoried separately.
+            Arena.Presentation.VFX.CombatVFXRegistry.LoadShared();
             var runner = ScriptableObject.CreateInstance<TestRunnerApi>();
             var callbacks = new Callbacks(report, Path.Combine(output, "tests.xml"));
             runner.RegisterCallbacks(callbacks);

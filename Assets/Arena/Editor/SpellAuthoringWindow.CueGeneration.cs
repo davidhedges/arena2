@@ -139,10 +139,9 @@ namespace Arena.Editor
             EditorGUILayout.HelpBox(
                 "Archetype-derived cues from SpellVfxGenerator + SchoolVfxSet assets, diffed against "
                 + "the runtime combat_vfx_cues rows above. This comparison does not save changes. "
-                + "The Write Cues to Catalog button below can update matching ABILITY rows and add "
-                + "generated slots after confirmation. Changed, catalog-only, or ambiguous slots require "
-                + "manual reconciliation before writing. A slot key identifies a cue; it does not "
-                + "mark that cue as automatically generated.",
+                + "Regeneration updates only explicitly GENERATED ABILITY rows, using all animation "
+                + "contexts. MANUAL and LEGACY rows retain their authored fields. Generated-only slots "
+                + "are proposals: declare ownership in the catalog before materializing them.",
                 MessageType.Info);
 
             GeneratedCuePreview preview = GetOrBuildGeneratedCuePreview(
@@ -164,7 +163,7 @@ namespace Arena.Editor
             if (preview.MissingOverrideCatalog)
             {
                 EditorGUILayout.HelpBox(
-                    "No SpellVfxOverrideCatalog asset found. School-derived slots can still preview, but bespoke spell slots and cast-hand exceptions are unavailable.",
+                    "No SpellVfxOverrideCatalog asset found. School-derived slots can still preview, but bespoke spell slot looks are unavailable.",
                     MessageType.Error);
             }
 
@@ -184,9 +183,7 @@ namespace Arena.Editor
                 out List<string> ambiguousSlots,
                 out List<CombatVfxCueDefinition> uninferrableCues);
             DrawCueDiff(preview.Cues, catalogBySlot, ambiguousSlots, uninferrableCues);
-            DrawWriteToCatalogButton(
-                abilityId, preview.Cues, catalogBySlot,
-                inferenceClean: ambiguousSlots.Count == 0 && uninferrableCues.Count == 0);
+            DrawWriteToCatalogButton(abilityId);
         }
 
         private GeneratedCuePreview GetOrBuildGeneratedCuePreview(
@@ -255,6 +252,7 @@ namespace Arena.Editor
         private void InvalidateGeneratedCueCache()
         {
             _generatedCuePreviewByAbilityId.Clear();
+            _globalCuePreviewPlans.Clear();
             _cachedSchoolPalettes.Clear();
             _cachedSpellOverrides = null;
             _vfxAuthoringAssetsLoaded = false;
@@ -531,6 +529,7 @@ namespace Arena.Editor
             uninferrable = new List<CombatVfxCueDefinition>();
             foreach (CombatVfxCueDefinition cue in _selectedAbilityCues)
             {
+                if (cue.authoring_mode == SpellCueCatalogWriter.Legacy) continue;
                 if (!TryResolveCatalogSlotKey(cue, out string slotKey))
                 {
                     uninferrable.Add(cue);
@@ -627,104 +626,26 @@ namespace Arena.Editor
             EditorGUILayout.HelpBox(summary, clean ? MessageType.Info : MessageType.Warning);
         }
 
-        // Materialise the generated cues into progression_catalog.shared.json via the tested surgical
-        // writer (SpellCueCatalogWriter). Two row dispositions:
-        //   • a generated slot that matches an authored cue 1:1 UPDATES that row in place, keeping its
-        //     sort_order (so an unchanged spell like FIREBALL diffs to only the inserted slot keys);
-        //   • a generator-only slot (the "generator adds a slot" migration bucket) is INSERTED with a
-        //     fresh sort_order from NextInsertSortOrder — past the owner's current max, so it collides
-        //     with neither an authored row nor another inserted row.
-        // The write is gated to the cases where it is provably non-destructive and unsurprising: slot
-        // inference must be unambiguous (inferenceClean), no matched slot may differ (`changed` — a
-        // wiring diff to adjudicate by hand, never auto-applied), and the generator must be a superset
-        // of the authored slots (no `catalogOnly` — an authored slot the generator does not emit would
-        // survive alongside an inserted one, e.g. the SelfNova Burst/Impact slot-name nuance, doubling
-        // the effect). Those three still block; a pure superset (updates + inserts) is writable.
-        private void DrawWriteToCatalogButton(
-            string abilityId,
-            List<GeneratedCue> generated,
-            Dictionary<string, CombatVfxCueDefinition> catalogBySlot,
-            bool inferenceClean)
+        // The selected profile is preview-only. Writes use an independently resolved global plan.
+        private void DrawWriteToCatalogButton(string abilityId)
         {
-            int maxExistingSortOrder = 0;
-            foreach (CombatVfxCueDefinition cue in catalogBySlot.Values)
-                maxExistingSortOrder = Mathf.Max(maxExistingSortOrder, cue.sort_order);
-
-            var rows = new List<SpellCueRow>(generated.Count);
-            int changed = 0;
-            int inserted = 0;
-            // Slot-enum order so a multi-insert (e.g. BLESSED_SHIELD: cast_glow + impact) assigns the
-            // inserted sort_orders deterministically.
-            foreach (GeneratedCue gen in generated
-                         .OrderBy(g => (int)g.Slot)
-                         .ThenBy(g => g.SlotKey, System.StringComparer.Ordinal))
+            if (!_globalCuePreviewPlans.TryGetValue(abilityId, out var plan))
             {
-                int sortOrder;
-                if (catalogBySlot.TryGetValue(gen.SlotKey, out CombatVfxCueDefinition authored))
-                {
-                    if (DiffFields(gen, authored).Count > 0)
-                        changed++;
-                    sortOrder = authored.sort_order; // update in place
-                }
-                else
-                {
-                    sortOrder = NextInsertSortOrder(maxExistingSortOrder, inserted);
-                    inserted++;
-                }
-
-                rows.Add(new SpellCueRow(
-                    slot: gen.SlotKey,
-                    trigger: gen.Trigger,
-                    anchor: gen.Anchor,
-                    vfxId: gen.VfxId,
-                    attachMode: gen.AttachMode,
-                    vfxRole: gen.Role,
-                    lifecycle: gen.Lifecycle,
-                    projectileSequenceIndex: gen.ProjectileSequenceIndex,
-                    durationMs: gen.DurationMs,
-                    sortOrder: sortOrder));
+                plan = BuildGlobalCueWritePlan(abilityId);
+                _globalCuePreviewPlans.Add(abilityId, plan);
             }
-
-            int catalogOnly = 0;
-            var generatedSlots = new HashSet<string>(
-                generated.Select(g => g.SlotKey),
-                System.StringComparer.Ordinal);
-            foreach (string slot in catalogBySlot.Keys)
-                if (!generatedSlots.Contains(slot))
-                    catalogOnly++;
-
-            bool writable = inferenceClean
-                && generated.Count > 0
-                && changed == 0
-                && catalogOnly == 0;
-
-            EditorGUILayout.Space(4f);
-            using (new EditorGUI.DisabledScope(!writable || rows.Count == 0))
+            foreach (string error in plan.Errors)
+                EditorGUILayout.HelpBox(error, MessageType.Error);
+            foreach (string drift in plan.Drift)
+                EditorGUILayout.HelpBox(drift, MessageType.Warning);
+            EditorGUILayout.HelpBox(
+                $"{plan.Rows.Count} generated-owned cue(s) can be materialized across all animation contexts. "
+                + "Manual and legacy cues are preserved. New slots require an explicit ownership declaration.",
+                MessageType.Info);
+            using (new EditorGUI.DisabledScope(plan.Errors.Count > 0 || plan.Rows.Count == 0))
             {
-                if (GUILayout.Button($"Write {abilityId} Cues to Catalog", GUILayout.Width(300f)))
-                    ConfirmAndWriteOwnerCues(abilityId, rows, inserted);
-            }
-
-            if (!writable)
-            {
-                EditorGUILayout.HelpBox(
-                    "Writing is enabled when every generated slot either matches an authored cue 1:1 "
-                    + "(updated in place) or is a new slot the generator adds (inserted in sort order). "
-                    + "It is blocked while any matched row is changed (a wiring diff to adjudicate), any "
-                    + "authored slot is catalog-only (the generator emits nothing for it — resolve or "
-                    + "remove it by hand), or slot inference is ambiguous.",
-                    MessageType.None);
-            }
-            else
-            {
-                string disposition = inserted > 0
-                    ? $"updates {rows.Count - inserted} authored cue(s) in place and inserts {inserted} new slot(s)"
-                    : "updates the authored cues in place";
-                EditorGUILayout.HelpBox(
-                    $"Writes the generated cues into progression_catalog.shared.json — {disposition}, "
-                    + "assigning inserted rows a fresh sort_order and leaving every other byte identical. "
-                    + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
-                    MessageType.None);
+                if (GUILayout.Button($"Regenerate {abilityId} Owned Cues", GUILayout.Width(320f)))
+                    ConfirmAndWriteOwnerCues(abilityId, plan.Rows, 0);
             }
         }
 
@@ -751,8 +672,8 @@ namespace Arena.Editor
             if (!EditorUtility.DisplayDialog(
                     "Write generated cues",
                     $"{detail} for {abilityId} in {SpellPresentationEditorData.ProgressionCatalogPath}?\n\n"
-                    + "Author-time slot keys are inserted and inserted rows get a fresh sort_order; every "
-                    + "other byte is preserved. "
+                    + "The displayed generated fields will be materialized after checking every animation context. "
+                    + "Manual and legacy cue fields are preserved. "
                     + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                     "Write",
                     "Cancel"))
@@ -853,7 +774,7 @@ namespace Arena.Editor
             return false;
         }
 
-        private static bool TryNormalizeExplicitSlotKey(string value, out string slotKey)
+        internal static bool TryNormalizeExplicitSlotKey(string value, out string slotKey)
         {
             string normalized = value.Trim().ToLowerInvariant();
             if (normalized.StartsWith("character_fx/", System.StringComparison.Ordinal))

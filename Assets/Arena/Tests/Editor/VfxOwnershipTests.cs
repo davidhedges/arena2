@@ -18,6 +18,51 @@ namespace Arena.Tests.Editor
                 + "\",\"authoring_mode\":\"" + mode + "\",\"authoring_reason\":\"" + reason + "\"}";
         private static string Catalog(params string[] cues) => "{\"combat_vfx_cues\":[" + string.Join(",", cues) + "]}";
 
+        private static Array Rows(string slot = "impact", string vfxId = "VFX_FIREBALL_HIT_01", int sort = 120)
+        {
+            var type = Writer.Assembly.GetType("Arena.Editor.SpellCueRow", true)!;
+            var result = Array.CreateInstance(type, 1);
+            result.SetValue(Activator.CreateInstance(type, new object?[]
+                { slot, "SPELL_IMPACT", "IMPACT_POINT", vfxId, "SPAWN_WORLD", "ONE_SHOT", "DURATION", null, 1000, sort }), 0);
+            return result;
+        }
+
+        [TestCase("MANUAL")]
+        [TestCase("LEGACY")]
+        [TestCase("")]
+        public void Splice_RejectsUnownedOrManualTargets(string mode)
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => Writer.GetMethod("SpliceOwnerCues")!
+                .Invoke(null, new object[] { Catalog(Cue(mode, "Preserved")), "SPELL_TEST", Rows(sort: 10) }));
+            Assert.That(error!.InnerException!.Message, Does.Contain("not GENERATED"));
+        }
+
+        [Test]
+        public void Splice_RejectsAnExistingRowWithAnotherSlot()
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => Writer.GetMethod("SpliceOwnerCues")!
+                .Invoke(null, new object[] { Catalog(Cue("GENERATED")), "SPELL_TEST", Rows(slot: "cast_glow", sort: 10) }));
+            Assert.That(error!.InnerException!.Message, Does.Contain("different slot"));
+        }
+
+        [TestCase("impact", "VFX_WRONG", 120)]
+        [TestCase("cast_glow", "VFX_FIRE_CAST_HAND_01", 100)]
+        [TestCase("impact", "VFX_FIREBALL_HIT_01", 999)]
+        public void FileWriter_RejectsStaleCandidatesManualRowsAndImplicitInsertions(string slot, string vfxId, int order)
+        {
+            string original = File.ReadAllText("server/src/progression_catalog.shared.json");
+            string path = Path.Combine(Path.GetTempPath(), "arena-vfx-ownership-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                File.WriteAllText(path, original);
+                var error = Assert.Throws<TargetInvocationException>(() => Writer.GetMethod("WriteOwnerCues")!
+                    .Invoke(null, new object[] { path, "SPELL_FIREBALL", Rows(slot, vfxId, order), original }));
+                Assert.That(error!.InnerException, Is.TypeOf<InvalidOperationException>());
+                Assert.That(File.ReadAllText(path), Is.EqualTo(original));
+            }
+            finally { File.Delete(path); }
+        }
+
         [Test]
         public void CurrentCatalog_EveryCueHasExplicitOwnership()
             => Assert.That(Errors(File.ReadAllText("server/src/progression_catalog.shared.json")), Is.Empty);
@@ -132,6 +177,38 @@ namespace Arena.Tests.Editor
                 var cue = Cues(window).Single(c => Value(c, "owner_id") == "SPELL_FIREBALL" && Value(c, "slot") == "cast_glow");
                 cue.GetType().GetField("authoring_mode")!.SetValue(cue, "GENERATED");
                 Assert.That(Check(window, out _).Cast<string>().Any(e => e.Contains("equipment-dependent")), Is.True);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(window); }
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void GlobalPlan_RejectsAmbiguousOrMissingCandidates(bool ambiguous)
+        {
+            var window = Window();
+            try
+            {
+                var cue = Cues(window).Single(c => Value(c, "owner_id") == "SPELL_FIREBALL"
+                    && Value(c, "slot") == (ambiguous ? "cast_glow" : "impact"));
+                cue.GetType().GetField("slot")!.SetValue(cue, ambiguous ? "impact" : "status_attachment");
+                Assert.That(Check(window, out _).Cast<string>().Any(e => e.Contains(ambiguous ? "ambiguous" : "exactly one candidate")), Is.True);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(window); }
+        }
+
+        [Test]
+        public void GlobalPlan_RequiresEveryCatalogDisciplineContext()
+        {
+            var window = Window();
+            try
+            {
+                window.GetType().GetMethod("EnsureAnimationSetsLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+                var field = window.GetType().GetField("_animationSets", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var sets = (Array)field.GetValue(window)!;
+                var missing = Array.CreateInstance(sets.GetType().GetElementType()!, sets.Length - 1);
+                Array.Copy(sets, missing, missing.Length);
+                field.SetValue(window, missing);
+                Assert.That(Check(window, out _).Cast<string>().Any(e => e.Contains("exactly one animation set")), Is.True);
             }
             finally { UnityEngine.Object.DestroyImmediate(window); }
         }

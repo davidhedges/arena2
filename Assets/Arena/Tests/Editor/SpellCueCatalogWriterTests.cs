@@ -51,14 +51,26 @@ namespace Arena.Tests.Editor
 
         private static string Splice(string json, string ownerId, IEnumerable<object> rows)
         {
+            // Historical formatting fixtures predate ownership metadata. Declare their ABILITY
+            // rows generated and strip only that fixture metadata from the result. Ownership
+            // rejection itself is exercised against unmodified inputs in VfxOwnershipTests.
+            bool historicalFixture = !json.Contains("\"authoring_mode\"");
+            if (historicalFixture)
+                json = Regex.Replace(json, @"\{[^{}]*\}", match =>
+                    Regex.IsMatch(match.Value, "\"owner_kind\"\\s*:\\s*\"ABILITY\"")
+                        ? match.Value.Substring(0, match.Value.Length - 1) + ",\"authoring_mode\":\"GENERATED\"}"
+                        : match.Value);
             object[] rowArray = rows.ToArray();
             Array typed = Array.CreateInstance(RowType, rowArray.Length);
             for (int i = 0; i < rowArray.Length; i++)
                 typed.SetValue(rowArray[i], i);
 
-            return (string)WriterType
+            string output = (string)WriterType
                 .GetMethod("SpliceOwnerCues", BindingFlags.Public | BindingFlags.Static)!
                 .Invoke(null, new object[] { json, ownerId, typed })!;
+            return historicalFixture
+                ? Regex.Replace(output, ",\\s*\"authoring_mode\"\\s*:\\s*\"GENERATED\"", "")
+                : output;
         }
 
         // The three FIREBALL rows exactly as authored/materialized today (Projectile archetype, Instant).
@@ -84,7 +96,8 @@ namespace Arena.Tests.Editor
             // FIREBALL is already materialized in the committed catalog, so re-materializing it is a
             // byte-exact no-op — proving the writer's output matches what's checked in (no drift).
             Assert.That(original, Does.Contain("\"slot\": \"cast_glow\""));
-            string output = Splice(original, "SPELL_FIREBALL", FireballRows());
+            // Hand-dependent cast/body rows are manual; the impact is generated-owned.
+            string output = Splice(original, "SPELL_FIREBALL", FireballRows().Skip(2));
             Assert.That(output, Is.EqualTo(original), "re-materializing FIREBALL must reproduce the committed catalog byte-for-byte");
         }
 
@@ -254,21 +267,20 @@ namespace Arena.Tests.Editor
         [TestCase(false)]
         public void FileWrite_RequiresTheCatalogUsedByThePreview(bool unchangedSincePreview)
         {
-            const string preview = "{\"combat_vfx_cues\":[{\"owner_kind\":\"ABILITY\",\"owner_id\":\"SPELL_TEST\",\"vfx_id\":\"VFX_OLD\",\"sort_order\":10}]}";
-            string manualEdit = preview.Replace("VFX_OLD", "VFX_MANUAL_EDIT");
+            string preview = File.ReadAllText(CatalogRelativePath);
+            string manualEdit = preview + "\n";
             string path = Path.Combine(Path.GetTempPath(), $"arena-cue-write-{Guid.NewGuid():N}.json");
             try
             {
                 File.WriteAllText(path, unchangedSincePreview ? preview : manualEdit);
                 Array rows = Array.CreateInstance(RowType, 1);
-                rows.SetValue(Row("impact", "SPELL_IMPACT", "IMPACT_POINT", "VFX_NEW", "SPAWN_WORLD",
-                    "ONE_SHOT", "DURATION", null, 500, 10), 0);
+                rows.SetValue(FireballRows()[2], 0);
                 MethodInfo write = WriterType.GetMethod("WriteOwnerCues")!;
-                object[] arguments = { path, "SPELL_TEST", rows, preview };
+                object[] arguments = { path, "SPELL_FIREBALL", rows, preview };
                 if (unchangedSincePreview)
                 {
-                    Assert.That((bool)write.Invoke(null, arguments)!, Is.True);
-                    Assert.That(File.ReadAllText(path), Does.Contain("VFX_NEW"));
+                    Assert.That((bool)write.Invoke(null, arguments)!, Is.False);
+                    Assert.That(File.ReadAllText(path), Is.EqualTo(preview));
                 }
                 else
                 {

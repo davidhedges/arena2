@@ -196,6 +196,14 @@ namespace Arena.Editor
             if (!string.Equals(original, expectedCatalogJson, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "The catalog changed since this preview was loaded. Reload the spell authoring window before writing generated cues.");
+            var errors = ValidateOwnership(original);
+            var window = UnityEngine.ScriptableObject.CreateInstance<SpellAuthoringWindow>();
+            try { errors.AddRange(window.ValidateCueWriteRequest(original, ownerId, rows)); }
+            finally { UnityEngine.Object.DestroyImmediate(window); }
+            if (errors.Count > 0)
+                throw new InvalidOperationException(string.Join("\n", errors));
+            if (File.ReadAllText(catalogPath) != original)
+                throw new InvalidOperationException("The catalog changed during generation validation. Reload before writing.");
             string updated = SpliceOwnerCues(original, ownerId, rows);
             if (string.Equals(original, updated, StringComparison.Ordinal))
                 return false;
@@ -266,6 +274,16 @@ namespace Arena.Editor
                 if (!targetSortOrders.Add(sortOrder))
                     throw new InvalidOperationException(
                         $"Owner '{ownerId}' has duplicate sort_order {sortOrder}; cannot match generated rows unambiguously.");
+                if (rowsBySortOrder.TryGetValue(sortOrder, out var requested))
+                {
+                    if (!TryGetString(fields, "authoring_mode", out string mode) || mode != Generated)
+                        throw new InvalidOperationException($"Owner '{ownerId}' row {sortOrder} is not GENERATED; manual and legacy cues cannot be overwritten.");
+                    if (TryGetString(fields, "slot", out string slot) && !string.IsNullOrWhiteSpace(slot)
+                        && (!SpellAuthoringWindow.TryNormalizeExplicitSlotKey(slot, out string normalizedSlot)
+                            || !SpellAuthoringWindow.TryNormalizeExplicitSlotKey(requested.Slot, out string requestedSlot)
+                            || normalizedSlot != requestedSlot))
+                        throw new InvalidOperationException($"Owner '{ownerId}' row {sortOrder} targets a different slot.");
+                }
                 targets.Add((start, end, sortOrder));
             }
 
@@ -413,6 +431,7 @@ namespace Arena.Editor
             f.Set("owner_id", ownerId);
             ApplyGeneratorFields(f, row);
             f.Set("sort_order", row.SortOrder);
+            f.Set("authoring_mode", Generated);
             return SerializeCanonical(f, fieldIndent, braceIndent);
         }
 

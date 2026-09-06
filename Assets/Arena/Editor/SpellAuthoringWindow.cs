@@ -703,6 +703,9 @@ namespace Arena.Editor
                         : "missing template";
                     EditorGUILayout.LabelField(
                         $"{ownerKind}:{ownerId} | {trigger} | {role} | {anchor} | {attachMode} | {Normalize(cue.vfx_id)} | {lifecycle} | duration={cue.duration_ms}ms{sequence} | sort={cue.sort_order} | {templateStatus}");
+                    EditorGUILayout.LabelField("Authoring owner", cue.authoring_mode);
+                    if (!string.IsNullOrWhiteSpace(cue.authoring_reason))
+                        EditorGUILayout.HelpBox(cue.authoring_reason, MessageType.Info);
 
                     if (TryBuildCastTimeHandGlowWarning(cue, castTimeMs, out string castCueWarning))
                         EditorGUILayout.HelpBox(castCueWarning, MessageType.Warning);
@@ -1149,7 +1152,9 @@ namespace Arena.Editor
                 builder.AppendLine($"    \"projectile_sequence_index\": {projectileSequenceIndex},");
             if (durationMs > 0)
                 builder.AppendLine($"    \"duration_ms\": {durationMs},");
-            builder.AppendLine($"    \"sort_order\": {sortOrder}");
+            builder.AppendLine($"    \"sort_order\": {sortOrder},");
+            builder.AppendLine("    \"authoring_mode\": \"MANUAL\",");
+            builder.AppendLine("    \"authoring_reason\": \"Explicit cue authored with the spell draft; review before promoting to generated ownership.\"");
             builder.Append("  }");
         }
 
