@@ -37,8 +37,8 @@ use crate::auto_attack::tick_auto_attacks;
 use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
-    has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
-    prune_combat_events, prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
+    has_due_pending_effects, process_periodic_status_ticks, prune_combat_events,
+    prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, tick_emanations,
     tick_immolations, tick_legacy_hemorrhaging, MovementModifiers, StatusRuntimeView,
@@ -746,13 +746,6 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
         log::warn!(
             "[INIT] Backfilled {} missing character appearance rows",
             repaired_appearance_rows
-        );
-    }
-    let repaired_hot_rows = normalize_legacy_hot_status_rows(ctx);
-    if repaired_hot_rows > 0 {
-        log::warn!(
-            "[INIT] Normalized {} legacy HOT status rows with negative tick_amount",
-            repaired_hot_rows
         );
     }
     let bootstrap_contexts = PlayerTickContexts::collect(ctx);

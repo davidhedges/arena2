@@ -10352,28 +10352,6 @@ pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
     }
 }
 
-pub fn normalize_legacy_hot_status_rows(ctx: &ReducerContext) -> usize {
-    let mut repaired = 0_usize;
-    let hot_kind = StatusEffectKind::Hot.as_str();
-    let hot_rows: Vec<StatusEffect> = ctx
-        .db
-        .status_effect()
-        .effect_kind()
-        .filter(hot_kind)
-        .collect();
-
-    for mut effect in hot_rows {
-        if effect.tick_amount >= 0 {
-            continue;
-        }
-        effect.tick_amount = effect.tick_amount.saturating_abs();
-        ctx.db.status_effect().status_id().update(effect);
-        repaired += 1;
-    }
-
-    repaired
-}
-
 // Status expiration is coordinated across three paths:
 // 1) `expire_statuses_for_target` pre-cleans a target before stack-policy application.
 // 2) `process_periodic_status_ticks` ignores rows that became expired before tick emission.
@@ -14187,6 +14165,29 @@ mod tests {
                     damage_type: crate::combat::DamageType::Physical,
                     tick_interval: Duration::from_millis(250),
                 }),
+            ),
+            (
+                "valid hot",
+                AuthoredStatusPayload::new(StatusEffectKind::Hot, 0.0, 0, 9, 500, 0.0),
+                Some(StatusPayload::Hot {
+                    tick_heal: 9,
+                    tick_interval: Duration::from_millis(500),
+                }),
+            ),
+            (
+                "negative hot",
+                AuthoredStatusPayload::new(StatusEffectKind::Hot, 0.0, 0, -9, 500, 0.0),
+                None,
+            ),
+            (
+                "zero hot",
+                AuthoredStatusPayload::new(StatusEffectKind::Hot, 0.0, 0, 0, 500, 0.0),
+                None,
+            ),
+            (
+                "hot missing interval",
+                AuthoredStatusPayload::new(StatusEffectKind::Hot, 0.0, 0, 9, 0, 0.0),
+                None,
             ),
             (
                 "valid attack speed debuff",
