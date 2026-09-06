@@ -91,6 +91,9 @@ namespace Arena.Editor.Maps
         private const string LavaMaterialPath =
             "Assets/Arena/Content/Art/Environment/Lava/M_Lava_FireShoreMagma.mat";
 
+        // Twenty percent fewer repeats per axis makes each lava feature 25% larger.
+        private const float LavaTilingMultiplier = 0.8f;
+
         /// <summary>
         /// Deck and skirt share one material, so the platform reads as a single
         /// slab of rock torn out of somewhere rather than a floor resting on a
@@ -196,9 +199,8 @@ namespace Arena.Editor.Maps
         private const float RockUvScale = 0.25f;
 
         /// <summary>
-        /// Where this map's panorama lands. NOT the dungeon's asset:
-        /// the backdrop is a texture referenced by GUID, so sharing one path
-        /// would make every dungeon rebuild repaint this scene's sky.
+        /// This map's authored volcanic panorama. Rebuilds retain the artwork;
+        /// the procedural dungeon still generates its own independent backdrop.
         /// </summary>
         private const string BackdropAssetPath =
             "Assets/Arena/Content/Art/Generated/SurvivalCavernBackdrop.png";
@@ -297,18 +299,13 @@ namespace Arena.Editor.Maps
         private const float FogEnd = 220f;
 
         /// <summary>
-        /// A dim, cool downlight. The dungeon's equivalent is all but off at
-        /// this depth (0.02), which is right for a corridor lit by nothing but
-        /// its own walls and wrong for a duelling floor: with the lava underglow
-        /// as the only source, everything above knee height goes to silhouette
-        /// and NPC read fails. Shadows stay OFF — parallel shadows from a
-        /// consistent direction are the strongest possible tell that a space is
-        /// not underground, and the deck is flat, so no shadow is carrying
-        /// height information anyway.
+        /// Broad, slightly cool reflected light from the vault. Combat needs a
+        /// neutral value range above the deck, even with the lava light occluded
+        /// underneath it. This reuses the existing shadow-free directional fill.
         /// </summary>
-        private static readonly Color FillColor = new(0.55f, 0.62f, 0.78f);
+        private static readonly Color FillColor = new(0.82f, 0.87f, 1f);
 
-        private const float FillIntensity = 0.3f;
+        private const float FillIntensity = 0.7f;
 
         [MenuItem("Arena/Maps/Rebuild Arena Map 01", false, 100)]
         private static void RebuildFromMenu()
@@ -363,19 +360,7 @@ namespace Arena.Editor.Maps
             // Must run after the structures exist, for the bounds above. It
             // builds its OWN scene root and authors no colliders; nothing here
             // is a child of it or it of this.
-            DungeonCavernEnvelope.Build(
-                destination,
-                structures,
-                seed,
-                depth,
-                // Real lava is in the scene. The fake disc is an unlit gradient
-                // standing in for exactly this surface, and drawn on top of one
-                // it z-fights and flattens it.
-                buildGlowPool: false,
-                backdropAssetPath: BackdropAssetPath,
-                // The solid deck must occlude the upward lava light. Hard
-                // shadows work on both the PC and mobile render profiles.
-                underglowShadows: LightShadows.Hard);
+            CreateVolcanicEnvelope(destination, structures, seed, depth);
 
             CreateSpawnMarker(destination);
             CloneGameplayRig(destination, depth);
@@ -891,7 +876,12 @@ namespace Arena.Editor.Maps
             }
 
             Mesh mesh = BuildMesh("ArenaMap01LavaSea", vertices, uvs, triangles);
-            CreateRenderer(parent, "Lava Sea", mesh, LoadMaterial(LavaMaterialPath));
+            // A scene-owned copy keeps this arena's scale independent of the
+            // shared surface-demo material. All lava layers share _BaseMap UVs.
+            Material lava = new(LoadMaterial(LavaMaterialPath)) { name = "Arena Map 01 Lava" };
+            lava.SetTextureScale("_BaseMap", lava.GetTextureScale("_BaseMap") * LavaTilingMultiplier);
+            lava.SetFloat("_TilingBreakup", 1f);
+            CreateRenderer(parent, "Lava Sea", mesh, lava);
         }
 
         // ------------------------------------------------------------ plumbing
@@ -1109,9 +1099,9 @@ namespace Arena.Editor.Maps
             cameraData.renderPostProcessing = true;
             cameraData.antialiasing = AntialiasingMode.None;
 
-            // Shared with the dungeon on purpose: same cavern, same bloom,
-            // vignette and grade. A map-only copy would be a second asset
-            // to keep in step for no difference anyone can see.
+            // Keep the dungeon's source profile intact. The arena's scene-owned
+            // grade retains lava bloom but avoids crushed combat silhouettes,
+            // blue-shifted team colours and a heavily darkened screen perimeter.
             VolumeProfile? profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(VolumeProfilePath);
             if (profile == null)
                 throw new InvalidOperationException($"Required Volume profile '{VolumeProfilePath}' is missing.");
@@ -1122,16 +1112,150 @@ namespace Arena.Editor.Maps
             volume.priority = 0f;
             volume.blendDistance = 0f;
             volume.weight = 1f;
-            volume.sharedProfile = profile;
+            VolumeProfile combatProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+            combatProfile.name = "Arena Map 01 Combat Grade";
+            foreach (VolumeComponent component in profile.components)
+                combatProfile.components.Add(UnityEngine.Object.Instantiate(component));
+            if (combatProfile.TryGet(out Bloom bloom))
+            {
+                bloom.threshold.Override(0.9f);
+                bloom.intensity.Override(0.85f);
+            }
+            if (combatProfile.TryGet(out Vignette vignette))
+            {
+                vignette.intensity.Override(0.18f);
+                vignette.smoothness.Override(0.35f);
+            }
+            if (combatProfile.TryGet(out LiftGammaGain grade))
+            {
+                grade.lift.Override(new Vector4(1f, 1f, 1f, 0f));
+                grade.gamma.Override(new Vector4(1f, 1f, 1f, 0f));
+                grade.gain.Override(new Vector4(1f, 1f, 1f, 0f));
+            }
+            volume.sharedProfile = combatProfile;
+        }
+
+        private static void CreateVolcanicEnvelope(
+            Scene destination, GameObject structures, int seed, CavernDepthProfile depth)
+        {
+            DungeonCavernEnvelope.Build(
+                destination, structures, seed, depth,
+                buildGlowPool: false,
+                backdropAssetPath: BackdropAssetPath,
+                underglowShadows: LightShadows.Hard,
+                generateBackdrop: false);
+            CavernBackdrop.ApplyAuthored(BackdropAssetPath);
+            RenderSettings.skybox.SetFloat("_Exposure", 0.32f);
+            RefineVolcanicSpireSurfaces(destination);
+        }
+
+        private static void RefineVolcanicSpireSurfaces(Scene scene)
+        {
+            const string cliffFolder = "Assets/ThirdParty/AssetStore/Environments/" +
+                "StylizedMaterialsBundle/Textures/FireShore/FireShore_CrackedCliff/";
+            Texture2D rock = AssetDatabase.LoadAssetAtPath<Texture2D>(cliffFolder + "T_FireShore_CrackedCliff_D.tga")
+                ?? throw new InvalidOperationException("The volcanic cliff albedo is missing.");
+            Texture2D ember = AssetDatabase.LoadAssetAtPath<Texture2D>(cliffFolder + "T_FireShore_CrackedCliff_E.tga")
+                ?? throw new InvalidOperationException("The volcanic cliff emission is missing.");
+            GameObject envelope = scene.GetRootGameObjects().Single(root => root.name == DungeonCavernEnvelope.RootName);
+            foreach (MeshFilter filter in envelope.GetComponentsInChildren<MeshFilter>())
+            {
+                Mesh source = filter.sharedMesh;
+                if (!source.name.StartsWith("CavernSpire_", StringComparison.Ordinal)
+                    && !source.name.StartsWith("CavernStalactite_", StringComparison.Ordinal))
+                    continue;
+                filter.sharedMesh = BuildBasaltSpire(source);
+                Material material = filter.GetComponent<MeshRenderer>().sharedMaterial;
+                material.SetFloat("_RockDetail", 1f);
+                material.SetTexture("_RockMap", rock);
+                material.SetTexture("_EmberMap", ember);
+                material.SetFloat("_RockTiling", 0.025f);
+            }
+        }
+
+        private static Mesh BuildBasaltSpire(Mesh source)
+        {
+            // Retain each formation's anchor, height and depth band. The more
+            // irregular shoulders, fluted sides and leaning tip break the old
+            // straight cone outline; all of this stays outside gameplay geometry.
+            int seed = 17;
+            foreach (char character in source.name)
+                seed = unchecked(seed * 31 + character);
+            System.Random rng = new(seed);
+            bool hanging = source.bounds.center.y < 0f;
+            float sign = hanging ? -1f : 1f;
+            float height = source.bounds.size.y;
+            float radius = Mathf.Max(source.bounds.extents.x, source.bounds.extents.z);
+            const int sides = 12;
+            const int rings = 13;
+            var vertices = new Vector3[sides * rings];
+            var colours = new Color[vertices.Length];
+            var triangles = new List<int>(sides * (rings - 1) * 6 + (sides - 2) * 6);
+            var flutes = new float[sides];
+            for (int side = 0; side < sides; side++)
+                flutes[side] = Mathf.Lerp(0.62f, 1.15f, (float)rng.NextDouble());
+            Vector2 lean = new((float)rng.NextDouble() - 0.5f, (float)rng.NextDouble() - 0.5f);
+            Color rootColour = source.colors[0];
+            Color tipColour = source.colors[source.vertexCount - 1];
+            // The old upper vertices were almost black. A faint ash-grey bounce
+            // reveals stone planes against the detailed ceiling without emission.
+            Color ash = new(0.028f, 0.025f, 0.026f);
+            for (int ring = 0; ring < rings; ring++)
+            {
+                float t = ring / (float)(rings - 1);
+                float taper = Mathf.Max(0.018f, Mathf.Pow(1f - t, 0.78f));
+                float shelf = (ring % 3 == 1 ? 1.12f : 0.93f) * Mathf.Lerp(0.88f, 1.12f, (float)rng.NextDouble());
+                // Extend the broad hanging roots upward into the vault; a flat
+                // cap suspended in empty space was a particularly visible tell.
+                float y = sign * height * t + (hanging ? height * 0.65f * Mathf.Pow(1f - t, 4f) : 0f);
+                for (int side = 0; side < sides; side++)
+                {
+                    float angle = side * Mathf.PI * 2f / sides + Mathf.Sin(t * 5f) * 0.09f;
+                    float r = radius * taper * shelf * flutes[side];
+                    vertices[ring * sides + side] = new Vector3(
+                        Mathf.Cos(angle) * r + lean.x * radius * t * t,
+                        y + Mathf.Sin(side * 2.4f + ring) * height * 0.009f * Mathf.Sin(t * Mathf.PI),
+                        Mathf.Sin(angle) * r + lean.y * radius * t * t);
+                    Color colour = Color.Lerp(rootColour, tipColour, t);
+                    colour = Color.Lerp(colour, ash, hanging ? 0.64f : 0.85f);
+                    colours[ring * sides + side] = colour;
+                }
+            }
+            for (int ring = 0; ring < rings - 1; ring++)
+            for (int side = 0; side < sides; side++)
+            {
+                int a = ring * sides + side;
+                int b = ring * sides + (side + 1) % sides;
+                int c = a + sides;
+                int d = b + sides;
+                triangles.AddRange(new[] { a, c, b, b, c, d });
+            }
+            for (int side = 1; side < sides - 1; side++)
+            {
+                triangles.AddRange(new[] { 0, side, side + 1 });
+                int top = (rings - 1) * sides;
+                triangles.AddRange(new[] { top, top + side + 1, top + side });
+            }
+            if (hanging)
+                for (int index = 0; index < triangles.Count; index += 3)
+                    (triangles[index + 1], triangles[index + 2]) = (triangles[index + 2], triangles[index + 1]);
+            Mesh mesh = new() { name = source.name + "_Basalt" };
+            mesh.vertices = vertices;
+            mesh.colors = colours;
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private static void CreateLighting(CavernDepthProfile depth)
         {
-            GameObject fill = new("Cavern Fill Light");
+            GameObject fill = SceneManager.GetActiveScene().GetRootGameObjects()
+                .FirstOrDefault(root => root.name == "Cavern Fill Light") ?? new GameObject("Cavern Fill Light");
             fill.transform.position = new Vector3(0f, 12f, 0f);
             fill.transform.rotation = Quaternion.Euler(64f, -34f, 0f);
 
-            Light light = fill.AddComponent<Light>();
+            Light light = fill.GetComponent<Light>() ?? fill.AddComponent<Light>();
             light.type = LightType.Directional;
             light.color = FillColor;
             light.intensity = FillIntensity;
@@ -1141,11 +1265,11 @@ namespace Arena.Editor.Maps
             // RenderSettings.skybox is NOT touched: CavernBackdrop owns it and
             // has already run. Assigning here — even null — wipes the generated
             // panorama and drops the camera back to the flat clear colour.
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = depth.Ambient;
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.28f, 0.31f, 0.35f);
             RenderSettings.ambientIntensity = 1f;
-            RenderSettings.ambientEquatorColor = Color.black;
-            RenderSettings.ambientGroundColor = Color.black;
+            RenderSettings.ambientEquatorColor = new Color(0.20f, 0.21f, 0.235f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.13f, 0.085f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = depth.FogColor;

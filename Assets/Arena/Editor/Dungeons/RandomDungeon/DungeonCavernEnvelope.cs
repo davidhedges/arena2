@@ -168,6 +168,9 @@ namespace DungeonLab.Editor
         /// keeps the established shadow-free treatment by default; callers with
         /// a continuous overhead occluder can opt into shadows explicitly.
         /// </param>
+        /// <param name="generateBackdrop">
+        /// False when the caller applies an authored panorama after building the envelope.
+        /// </param>
         internal static void Build(
             Scene destination,
             GameObject dungeonRoot,
@@ -175,7 +178,8 @@ namespace DungeonLab.Editor
             CavernDepthProfile depth,
             bool buildGlowPool = true,
             string? backdropAssetPath = null,
-            LightShadows underglowShadows = LightShadows.None)
+            LightShadows underglowShadows = LightShadows.None,
+            bool generateBackdrop = true)
         {
             if (dungeonRoot == null)
                 throw new ArgumentNullException(nameof(dungeonRoot));
@@ -225,7 +229,8 @@ namespace DungeonLab.Editor
                 underglowShadows);
 
             // Behind every band: the painted layer the bands parallax against.
-            CavernBackdrop.Apply(seed, depth, backdropAssetPath);
+            if (generateBackdrop)
+                CavernBackdrop.Apply(seed, depth, backdropAssetPath);
 
             NormalizeEnvelopeObjects(root);
 

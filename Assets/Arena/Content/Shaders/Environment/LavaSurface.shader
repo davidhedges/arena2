@@ -1,7 +1,7 @@
-// Animated molten-lava surface: two noise-warped scrolling layers of the same
-// stylized texture set, blended by which layer is locally hotter, with HDR
-// emission that pulses spatially. Composes Common/AnimatedSurface.hlsl blocks;
-// lighting/shadow/depth behavior matches URP Lit (opaque).
+// Animated molten lava with flow-map advection and spatially pulsing emission.
+// The default blends two scrolling layers; the arena opts into randomized,
+// smoothly overlapping patches to hide repetition across its large lava lake.
+// Composes Common/AnimatedSurface.hlsl; lighting/shadows/depth match URP Lit.
 Shader "Arena/Environment/LavaSurface"
 {
     Properties
@@ -55,6 +55,7 @@ Shader "Arena/Environment/LavaSurface"
         [Space(12)]
         [Header(Advanced)]
         [ToggleUI] _WorldSpaceUV("World Space UV (XZ, 1 unit = 1 UV)", Float) = 0
+        [ToggleUI] _TilingBreakup("Randomize Lava Patches", Float) = 0
     }
 
     SubShader
@@ -101,6 +102,7 @@ Shader "Arena/Environment/LavaSurface"
             half _Smoothness;
             half _Metallic;
             half _WorldSpaceUV;
+            half _TilingBreakup;
         CBUFFER_END
         ENDHLSL
 
@@ -113,7 +115,7 @@ Shader "Arena/Environment/LavaSurface"
             Cull Back
 
             HLSLPROGRAM
-            #pragma target 2.0
+            #pragma target 3.0
             #pragma vertex LavaVertex
             #pragma fragment LavaFragment
 
@@ -145,6 +147,112 @@ Shader "Arena/Environment/LavaSurface"
             TEXTURE2D(_EmissionMap); SAMPLER(sampler_EmissionMap);
             TEXTURE2D(_NoiseMap);    SAMPLER(sampler_NoiseMap);
             TEXTURE2D(_FlowMap);     SAMPLER(sampler_FlowMap);
+
+            // A triangular lattice gives three overlapping texture patches.
+            // Each lattice vertex owns one stable random rotation/offset, so
+            // neighbouring triangles agree along their shared edge. Sharpened
+            // barycentric weights retain detail through the blends.
+            void LavaPatchTriangle(float2 uv, out float2 a, out float2 b, out float2 c, out float3 weights)
+            {
+                float2 lattice = float2(uv.x - uv.y * 0.577350269, uv.y * 1.154700538) * 0.65;
+                float2 cell = floor(lattice);
+                float2 f = frac(lattice);
+                if (f.x + f.y < 1.0)
+                {
+                    a = cell;
+                    b = cell + float2(1, 0);
+                    c = cell + float2(0, 1);
+                    weights = float3(1.0 - f.x - f.y, f.x, f.y);
+                }
+                else
+                {
+                    a = cell + 1.0;
+                    b = cell + float2(0, 1);
+                    c = cell + float2(1, 0);
+                    weights = float3(f.x + f.y - 1.0, 1.0 - f.x, 1.0 - f.y);
+                }
+                weights *= weights;
+                weights *= weights;
+                weights /= dot(weights, float3(1, 1, 1));
+            }
+
+            void LavaPatchTransform(float2 id, out float2 rotation, out float2 offset)
+            {
+                // Float-only hash, evaluated in full precision on both Metal
+                // and mobile. No dependence on the camera or animation phase.
+                float3 h = frac(float3(id.x, id.y, id.x) * float3(0.1031, 0.1030, 0.0973));
+                h += dot(h, h.yxz + 33.33);
+                h = frac((h.xxy + h.yzz) * h.zyx);
+                sincos(h.x * TWO_PI, rotation.x, rotation.y);
+                offset = h.yz * 17.0;
+            }
+
+            struct LavaPatchSample
+            {
+                half3 albedo;
+                half3 emission;
+                half3 normal;
+            };
+
+            LavaPatchSample SampleLavaPatch(
+                float2 id, float2 uvA, float2 uvB, float4 gradientX, float4 gradientY, half flowBlend)
+            {
+                float2 rotation, offset;
+                LavaPatchTransform(id, rotation, offset);
+                uvA = RotateUV(uvA, rotation) + offset;
+                uvB = RotateUV(uvB, rotation) + offset;
+                float2 dxA = RotateUV(gradientX.xy, rotation);
+                float2 dxB = RotateUV(gradientX.zw, rotation);
+                float2 dyA = RotateUV(gradientY.xy, rotation);
+                float2 dyB = RotateUV(gradientY.zw, rotation);
+
+                // Explicit gradients exclude the discontinuous random offset
+                // from mip selection; otherwise cell edges blur or shimmer.
+                LavaPatchSample result;
+                result.albedo = lerp(
+                    SAMPLE_TEXTURE2D_GRAD(_BaseMap, sampler_BaseMap, uvA, dxA, dyA).rgb,
+                    SAMPLE_TEXTURE2D_GRAD(_BaseMap, sampler_BaseMap, uvB, dxB, dyB).rgb, flowBlend);
+                result.emission = lerp(
+                    SAMPLE_TEXTURE2D_GRAD(_EmissionMap, sampler_EmissionMap, uvA, dxA, dyA).rgb,
+                    SAMPLE_TEXTURE2D_GRAD(_EmissionMap, sampler_EmissionMap, uvB, dxB, dyB).rgb, flowBlend);
+                result.normal = BlendLayerNormals(
+                    UnpackNormalScale(SAMPLE_TEXTURE2D_GRAD(_NormalMap, sampler_NormalMap, uvA, dxA, dyA), _NormalStrength),
+                    UnpackNormalScale(SAMPLE_TEXTURE2D_GRAD(_NormalMap, sampler_NormalMap, uvB, dxB, dyB), _NormalStrength), flowBlend);
+                result.normal.xy = RotateUV(result.normal.xy, float2(-rotation.x, rotation.y));
+                return result;
+            }
+
+            half SampleLavaMacroPatch(float2 id, float2 uv, float2 dx, float2 dy)
+            {
+                float2 rotation, offset;
+                LavaPatchTransform(id, rotation, offset);
+                return SAMPLE_TEXTURE2D_GRAD(_NoiseMap, sampler_NoiseMap,
+                    RotateUV(uv, rotation) + offset, RotateUV(dx, rotation), RotateUV(dy, rotation)).r;
+            }
+
+            half LavaMacroNoise(float2 uv)
+            {
+                half noise = 0.0h;
+                UNITY_BRANCH
+                if (_TilingBreakup < 0.5h)
+                {
+                    noise = SAMPLE_TEXTURE2D(_NoiseMap, sampler_NoiseMap, uv).r;
+                }
+                else
+                {
+                    float2 a = 0.0, b = 0.0, c = 0.0;
+                    float3 weights = 0.0;
+                    LavaPatchTriangle(uv, a, b, c, weights);
+                    float2 dx = ddx(uv), dy = ddy(uv);
+                    // Randomize the broad brightness field too: leaving it tiled
+                    // would preserve the large repeating patches in distant views.
+                    // Sampling the same noise retains its existing brightness range.
+                    noise = SampleLavaMacroPatch(a, uv, dx, dy) * weights.x
+                        + SampleLavaMacroPatch(b, uv, dx, dy) * weights.y
+                        + SampleLavaMacroPatch(c, uv, dx, dy) * weights.z;
+                }
+                return noise;
+            }
 
             struct Attributes
             {
@@ -208,58 +316,57 @@ Shader "Arena/Environment/LavaSurface"
                     TEXTURE2D_ARGS(_NoiseMap, sampler_NoiseMap),
                     baseUV * _NoiseTiling, _DistortionSpeed, _DistortionAmount, time, pulsePhase);
 
-                // Layer 2 lives on a rotated, rescaled grid so the two layers'
-                // tiling can never align into a visible repeat.
-                float sinR, cosR;
-                sincos(radians(_Layer2Rotation), sinR, cosR);
-                float2 base2 = RotateUV(baseUV, float2(sinR, cosR)) * _Layer2UVScale;
-
                 float2 uv1 = FlowUV(baseUV, _FlowDirection1.xy, _FlowSpeed1, time) + distortion;
-                float2 uv2 = FlowUV(base2, _FlowDirection2.xy, _FlowSpeed2, time) - distortion;
-
-                // Per-pixel advection along the flow map: every point creeps
-                // in its own local direction (the layer scrolls above are now
-                // just a gentle global drift on top). Both layers share one
-                // flow field and phase pair; the ping-pong crossfade hides
-                // each phase's snap-back.
                 half2 flowVector = DecodeFlowVector(
                     SAMPLE_TEXTURE2D(_FlowMap, sampler_FlowMap, baseUV * _FlowMapTiling).rg,
                     _FlowStrength);
-                // Layer 2's UV grid is rotated/rescaled, so the flow vector is
-                // mapped into that space too — both layers then advect in the
-                // same *world* direction at the same world speed.
-                half2 flowVector2 = RotateUV(flowVector, float2(sinR, cosR)) * _Layer2UVScale;
-                float2 uv1A, uv1B, uv2A, uv2B;
+                float2 uv1A, uv1B;
                 half flowBlend;
                 FlowMapPhases(uv1, flowVector, _FlowCycleSpeed, time, uv1A, uv1B, flowBlend);
-                FlowMapPhases(uv2, flowVector2, _FlowCycleSpeed, time, uv2A, uv2B, flowBlend);
 
-                half3 albedo1 = FlowedSampleRGB(TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap), uv1A, uv1B, flowBlend);
-                half3 albedo2 = FlowedSampleRGB(TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap), uv2A, uv2B, flowBlend);
-                half3 emission1 = FlowedSampleRGB(TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap), uv1A, uv1B, flowBlend);
-                half3 emission2 = FlowedSampleRGB(TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap), uv2A, uv2B, flowBlend);
-
-                // The locally hotter layer wins, so glowing veins from both
-                // layers keep surfacing through the blend. The scrolling noise
-                // jitters the balance so which layer dominates migrates across
-                // the surface over time (churn, not crossfade).
-                half weight2 = DualLayerWeight(
-                    Luminance(emission1), Luminance(emission2),
-                    _LayerBalance + (pulsePhase - 0.5) * 0.35, _LayerBlendSharpness);
-
-                half3 albedo = lerp(albedo1, albedo2, weight2) * _BaseColor.rgb;
-
-                // Normals advect with the same phases so shading moves with
-                // the color instead of floating on top of it.
-                half3 normal1 = BlendLayerNormals(
-                    UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv1A), _NormalStrength),
-                    UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv1B), _NormalStrength),
-                    flowBlend);
-                half3 normal2 = BlendLayerNormals(
-                    UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv2A), _NormalStrength),
-                    UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv2B), _NormalStrength),
-                    flowBlend);
-                half3 normalTS = BlendLayerNormals(normal1, normal2, weight2);
+                half3 albedo, emissionPattern, normalTS;
+                UNITY_BRANCH
+                if (_TilingBreakup > 0.5h)
+                {
+                    float2 a, b, c;
+                    float3 weights;
+                    LavaPatchTriangle(baseUV, a, b, c, weights);
+                    float4 gradientX = float4(ddx(uv1A), ddx(uv1B));
+                    float4 gradientY = float4(ddy(uv1A), ddy(uv1B));
+                    LavaPatchSample patchA = SampleLavaPatch(a, uv1A, uv1B, gradientX, gradientY, flowBlend);
+                    LavaPatchSample patchB = SampleLavaPatch(b, uv1A, uv1B, gradientX, gradientY, flowBlend);
+                    LavaPatchSample patchC = SampleLavaPatch(c, uv1A, uv1B, gradientX, gradientY, flowBlend);
+                    albedo = (patchA.albedo * weights.x + patchB.albedo * weights.y + patchC.albedo * weights.z) * _BaseColor.rgb;
+                    emissionPattern = patchA.emission * weights.x + patchB.emission * weights.y + patchC.emission * weights.z;
+                    normalTS = normalize(patchA.normal * weights.x + patchB.normal * weights.y + patchC.normal * weights.z);
+                }
+                else
+                {
+                    // Preserve the existing dual-layer look for other scenes.
+                    float sinR, cosR;
+                    sincos(radians(_Layer2Rotation), sinR, cosR);
+                    float2 base2 = RotateUV(baseUV, float2(sinR, cosR)) * _Layer2UVScale;
+                    float2 uv2 = FlowUV(base2, _FlowDirection2.xy, _FlowSpeed2, time) - distortion;
+                    half2 flowVector2 = RotateUV(flowVector, float2(sinR, cosR)) * _Layer2UVScale;
+                    float2 uv2A, uv2B;
+                    FlowMapPhases(uv2, flowVector2, _FlowCycleSpeed, time, uv2A, uv2B, flowBlend);
+                    half3 albedo1 = FlowedSampleRGB(TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap), uv1A, uv1B, flowBlend);
+                    half3 albedo2 = FlowedSampleRGB(TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap), uv2A, uv2B, flowBlend);
+                    half3 emission1 = FlowedSampleRGB(TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap), uv1A, uv1B, flowBlend);
+                    half3 emission2 = FlowedSampleRGB(TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap), uv2A, uv2B, flowBlend);
+                    half weight2 = DualLayerWeight(
+                        Luminance(emission1), Luminance(emission2),
+                        _LayerBalance + (pulsePhase - 0.5) * 0.35, _LayerBlendSharpness);
+                    albedo = lerp(albedo1, albedo2, weight2) * _BaseColor.rgb;
+                    emissionPattern = lerp(emission1, emission2, weight2);
+                    half3 normal1 = BlendLayerNormals(
+                        UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv1A), _NormalStrength),
+                        UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv1B), _NormalStrength), flowBlend);
+                    half3 normal2 = BlendLayerNormals(
+                        UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv2A), _NormalStrength),
+                        UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv2B), _NormalStrength), flowBlend);
+                    normalTS = BlendLayerNormals(normal1, normal2, weight2);
+                }
 
                 // Meter-scale brightness variation from one extra unscrolled
                 // noise tap: repetition reads mostly through emission, so
@@ -267,12 +374,12 @@ Shader "Arena/Environment/LavaSurface"
                 // what breaks the residual grid.
                 // (the trailing *2.0 compensates for the low-contrast noise
                 // source; see the contrast note in AnimatedSurface.hlsl)
-                half macroNoise = SAMPLE_TEXTURE2D(_NoiseMap, sampler_NoiseMap, baseUV * _MacroTiling).r;
+                half macroNoise = LavaMacroNoise(baseUV * _MacroTiling);
                 half macro = max(1.0 + _MacroVariation * (macroNoise * 2.0 - 1.0) * 2.0, 0.0);
                 albedo *= lerp(1.0, macro, 0.35);
 
                 half pulse = EmissionPulse(time, _EmissionPulseSpeed, _EmissionPulseAmount, pulsePhase);
-                half3 emission = lerp(emission1, emission2, weight2)
+                half3 emission = emissionPattern
                     * _EmissionColor.rgb * (_EmissionIntensity * pulse * macro);
 
                 SurfaceData surfaceData = (SurfaceData)0;

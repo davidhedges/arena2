@@ -166,6 +166,12 @@ namespace DungeonLab.Editor
             UnityEngine.Object.DestroyImmediate(texture);
             WriteBackdropAsset(png, assetPath);
 
+            ApplyAuthored(assetPath);
+        }
+
+        /// <summary>Use a scene's painted panorama without regenerating its artwork.</summary>
+        internal static void ApplyAuthored(string assetPath)
+        {
             Texture2D? imported = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
             if (imported == null)
                 throw new InvalidOperationException($"Generated backdrop '{assetPath}' did not import.");
