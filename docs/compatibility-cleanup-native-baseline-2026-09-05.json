@@ -1,0 +1,208 @@
+{
+  "scope": "Before runtime or authored asset cleanup; classification does not waive failures",
+  "failures": [
+    {
+      "test": "Arena.Tests.Editor.CombatAnimationVisualInterruptTests.CombatAnimationRemoteTiming_InstantTrimAndCatchupRemainBeforeRelease",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "reflection contract mismatch; update against current signature before relying on coverage",
+      "message_excerpt": "Missing method Arena.Presentation.CombatAnimationRequest.Authoritative"
+    },
+    {
+      "test": "Arena.Tests.Editor.CombatProjectilePredictionTests.CloudburstVfxRegistryReferencesTheFullAuthoredPrefab",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "asset load diagnostic attributed to first registry test; inventory separately and rerun explicitly",
+      "message_excerpt": "Unhandled log message: '[Error] CombatVFXRegistry entry 'VFX_CLEANSE_HOLY_01' has no prefab or component reference.'. Use UnityEngine.TestTools.LogAssert.Expect"
+    },
+    {
+      "test": "Arena.Tests.Editor.CombatProjectilePredictionTests.LockedProjectileRootIgnoresSimulationAndAuthoritativePositionUpdates",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "reflection contract mismatch; update against current signature before relying on coverage",
+      "message_excerpt": "System.InvalidOperationException : Sequence contains no matching element"
+    },
+    {
+      "test": "Arena.Tests.Editor.CombatVfxCueResolverTests.PhotosynthesisVfx_ScalesOnlyTheAuthoredLeafFlecksWithStacks",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"main.maxParticles = LeavesPerStack * stacks\"\n  But was:  \"#nullable enable\nusing UnityEngine;\n\nnamespace Arena.Presentation.VFX\n{\n    /// <summary>\n    /// Keeps the authored nature aura alive for the passive status lifetime and\n    /// caps its orbiting leaf flecks at one particle per replicated\n    /// Photosynthesis stack.\n    /// </summary>\n    internal sealed class PhotosynthesisVFX : ISpellVFX, IStackScaledVFX\n    {\n        internal const string VfxId = \"VFX_PHOTOSYNTHESIS_ACTIVE_01\";\n        private const string LeafParticleName = \"Flecks_Shiny_Additive\";\n        private const int MaxStacks = 5;\n        p"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.ActiveCatalog_ContainsEveryEnabledValidVersionedRecipe",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "System.Reflection.TargetInvocationException : Exception has been thrown by the target of an invocation.\n  ----> System.InvalidOperationException : [RECIPE_PREVIEW] recipe 'episode_hanging_bridge_court_01' had no compatible generated opportunity"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.AuthoringPreviewGallery_IsDeterministicAndCoversRequiredWorkflowViews",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "native test isolation symptom; rerun fixture in isolation and diagnose before changing behavior",
+      "message_excerpt": "Unhandled log message: '[Error] Action caused undo stack overflow. Some undo information may have been lost.'. Use UnityEngine.TestTools.LogAssert.Expect"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.ContractValidators_PassSchemaStructureVariationAndNeighbors",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "System.Reflection.TargetInvocationException : Exception has been thrown by the target of an invocation.\n  ----> System.InvalidOperationException : [RECIPE_PREVIEW] recipe 'episode_hanging_bridge_court_01' had no compatible generated opportunity"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.ContrastRecipe_IsStructurallyDifferentWithoutSpecialCaseSchema",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "System.Reflection.TargetInvocationException : Exception has been thrown by the target of an invocation.\n  ----> System.InvalidOperationException : [RECIPE_PREVIEW] recipe 'episode_hanging_bridge_court_01' had no compatible generated opportunity"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.FixedSeed_RecipeResolutionsRemainDeterministic",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "native test isolation symptom; rerun fixture in isolation and diagnose before changing behavior",
+      "message_excerpt": "Unhandled log message: '[Error] Action caused undo stack overflow. Some undo information may have been lost.'. Use UnityEngine.TestTools.LogAssert.Expect"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.RecipeStepStripLandings_DoNotOpenRemoteAbyssEdges",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "reflection contract mismatch; update against current signature before relying on coverage",
+      "message_excerpt": "  Missing transition constructor used by recipe realization.\n  Expected: not null\n  But was:  null\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.RendererAbyssAndCollision_ConsumeAllRecipesWithoutRepair",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "native test isolation symptom; rerun fixture in isolation and diagnose before changing behavior",
+      "message_excerpt": "Unhandled log message: '[Error] Action caused undo stack overflow. Some undo information may have been lost.'. Use UnityEngine.TestTools.LogAssert.Expect"
+    },
+    {
+      "test": "Arena.Tests.Editor.DungeonLabRecipeWorkflowTests.SliceD_ApprovedCompressionRecipeProvesDeterministicPoolAndDisableBehavior",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Expected string length 52 but was 0. Strings differ at index 0.\n  Expected: \"connector_example_01,connector_flexible_vestibule_01\"\n  But was:  <string.Empty>\n  -----------^\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.MovementRegressionTests.RandomDungeonEnvironment_UsesBakedLowerFloorWithoutFlatGroundPlane",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Expected: True\n  But was:  False\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.RuntimeOrchestrationRegressionTests.ArenaMap01_IsBuildRegisteredWithFourAuthoredEntrancesAndLaptopSafeLighting",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: not String containing \"m_Shadows:\n    m_Type: 1\"\n  But was:  \"%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!29 &1\nOcclusionCullingSettings:\n  m_ObjectHideFlags: 0\n  serializedVersion: 2\n  m_OcclusionBakeSettings:\n    smallestOccluder: 5\n    smallestHole: 0.25\n    backfaceThreshold: 100\n  m_SceneGUID: 00000000000000000000000000000000\n  m_OcclusionCullingData: {fileID: 0}\n--- !u!104 &2\nRenderSettings:\n  m_ObjectHideFlags: 0\n  serializedVersion: 10\n  m_Fog: 1\n  m_FogColor: {r: 0.011, g: 0.0048, b: 0.0034, a: 1}\n  m_FogMode: 1\n  m_FogDensity: 0.01\n  m_LinearFogStart: 60\n  m_LinearFogEnd: 220\n  m_AmbientSkyColor: {r: 0.155, g: 0.088,"
+    },
+    {
+      "test": "Arena.Tests.Editor.RuntimeOrchestrationRegressionTests.EntityRegistry_ProjectileContactHitReaction_UsesResolvedEventDamage",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Percentage-health projectile contacts must react when their resolved event damage is positive.\n  Expected: True\n  But was:  False\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.RuntimeOrchestrationRegressionTests.GameplaySubscriptionPlanner_BuildsExpectedStaticAndLocalQueries",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: property Length equal to 31\n  But was:  33\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.RuntimeOrchestrationRegressionTests.GameplaySubscriptionPlanner_PvpMatchQueriesReferenceOnlyDedicatedSchemaTables",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: property Length equal to 47\n  But was:  44\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.RuntimeOrchestrationRegressionTests.LingeringShadeReturnVfx_UsesNormalAbilityCueResolutionForBothEndpoints",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "reflection contract mismatch; update against current signature before relying on coverage",
+      "message_excerpt": "System.InvalidOperationException : Method Arena.Presentation.CombatVfxCueResolver.Resolve not found."
+    },
+    {
+      "test": "Arena.Tests.Editor.SpellAnimationResolverTests.CombatSetMirrorOverride_AlsoMirrorsLegacySemanticAnimations",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Expected string length 8 but was 9. Strings differ at index 0.\n  Expected: \"LeftHand\"\n  But was:  \"UseVfxCue\"\n  -----------^\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.SpellAnimationResolverTests.MotionResolver_CachesOnlySuccessesAndInvalidatesExplicitly",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Expected: 1\n  But was:  0\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.SpellAnimationResolverTests.RequestedSpellClassifications_MatchAuthoredMotions",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  ICICLE\n  Expected string length 8 but was 4. Strings differ at index 0.\n  Expected: \"Direct2H\"\n  But was:  \"None\"\n  -----------^\n"
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.GameplayHud_UsesSharedSlotPresentationAsAReadOnlyFrozenBuildView",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"ResolveActiveSelectableAction\"\n  But was:  \"#nullable enable\nusing System;\nusing System.Collections.Generic;\nusing UnityEngine;\nusing UnityEngine.UI;\nusing Arena.Entity;\nusing Arena.Simulation;\nusing Arena.Network;\nusing Arena.Combat;\nusing Arena.Input;\nusing Arena.Presentation;\nusing SpacetimeDB.Types;\nusing UnityEngine.SceneManagement;\nusing UnityEngine.EventSystems;\n\nnamespace Arena.UI\n{\n    /// <summary>\n    /// WoW-inspired HUD built procedurally via UGUI.\n    /// Self-bootstraps via RuntimeInitializeOnLoadMethod \u2014 no scene YAML required.\n    ///\n    /// Layout:\n    ///   Player frame   \u2014 top-left\n    ///  "
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.Hud_RendersFixedActionGridSlots",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"ActionBarKeymap.SelectableBindings\"\n  But was:  \"#nullable enable\nusing System;\nusing System.Collections.Generic;\nusing UnityEngine;\nusing UnityEngine.UI;\nusing Arena.Entity;\nusing Arena.Simulation;\nusing Arena.Network;\nusing Arena.Combat;\nusing Arena.Input;\nusing Arena.Presentation;\nusing SpacetimeDB.Types;\nusing UnityEngine.SceneManagement;\nusing UnityEngine.EventSystems;\n\nnamespace Arena.UI\n{\n    /// <summary>\n    /// WoW-inspired HUD built procedurally via UGUI.\n    /// Self-bootstraps via RuntimeInitializeOnLoadMethod \u2014 no scene YAML required.\n    ///\n    /// Layout:\n    ///   Player frame   \u2014 top-left\n    "
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.LingeringShadeReturnVfx_UsesAuthoredShadowInPrefab",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "System.IO.FileNotFoundException : Could not find file \"/Users/davidhedges/Projects/arena2/Assets/Arena/Resources/CombatVFX/playground/Realistic Ink Spells 1/shadow_in.prefab.meta\""
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.MeleeInputCode_GapCloseMaximumRangeDenialUsesExistingFeedbackPath",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"NotifyGapCloseMaximumRangeDenial(gapClose, slotId, pressedActionId);\"\n  But was:  \"#nullable enable\nusing System.Collections.Generic;\nusing UnityEngine;\nusing Arena.Combat;\nusing Arena.Entity;\nusing Arena.Network;\nusing Arena.Simulation;\nusing Arena.Presentation;\nusing Arena.Debugging;\nusing SpacetimeDB.Types;\n\nnamespace Arena.Input\n{\n    /// <summary>\n    /// Handles client-side melee prediction for slotted action-bar actions.\n    /// Direct keyboard ownership lives in SpellInputHandler; this component only\n    /// flushes queued followups and exposes TryTriggerAction for action-bar-dispatched\n    /// melee inp"
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.NovaVfx_UsesAuthoredCastAndTargetHitPrefabs",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "System.IO.FileNotFoundException : Could not find file \"/Users/davidhedges/Projects/arena2/Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta\""
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.RecallDispatch_UsesTheStoredSpellTargetingContract",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"StartAimMode(spellId, targetingDef.Kind, aimRadius)\"\n  But was:  \"#nullable enable\nusing System.Collections.Generic;\nusing UnityEngine;\nusing Arena.Network;\nusing Arena.Match;\nusing Arena.Combat;\nusing Arena.Presentation;\nusing Arena.Simulation;\nusing Arena.Entity;\nusing Arena.Debugging;\nusing Arena.UI;\nusing SpacetimeDB.Types;\n\nnamespace Arena.Input\n{\n    /// <summary>\n    /// Owns spell-specific input behavior: aim mode, charge-on-release, and\n    /// CastRequest / ReleaseCastRequest reducer calls.\n    ///\n    /// Client-side gates (matching TS canAttemptCast):\n    ///   - GCD active \u2192 reject\n    ///   - Activ"
+    },
+    {
+      "test": "Arena.Tests.Editor.UiInputContractTests.RimedDebuffs_UseAnIcyPaneAndExplainAbilityRemovalProtection",
+      "result": "Failed",
+      "run": "native-baseline",
+      "classification": "source/asset/count assertion drift candidate; verify current behavior before updating expectation",
+      "message_excerpt": "  Expected: String containing \"HasActiveRime(_tmpDebuff)\"\n  But was:  \"#nullable enable\nusing System;\nusing System.Collections.Generic;\nusing UnityEngine;\nusing UnityEngine.UI;\nusing Arena.Entity;\nusing Arena.Simulation;\nusing Arena.Network;\nusing Arena.Combat;\nusing Arena.Input;\nusing Arena.Presentation;\nusing SpacetimeDB.Types;\nusing UnityEngine.SceneManagement;\nusing UnityEngine.EventSystems;\n\nnamespace Arena.UI\n{\n    /// <summary>\n    /// WoW-inspired HUD built procedurally via UGUI.\n    /// Self-bootstraps via RuntimeInitializeOnLoadMethod \u2014 no scene YAML required.\n    ///\n    /// Layout:\n    ///   Player frame   \u2014 top-left\n    ///   Tar"
+    },
+    {
+      "test": "Arena.EditModeTests.WorldInteractionManifestTests.ReplicatedClosedDoor_BlocksPredictionAndLineQueries",
+      "result": "Failed",
+      "run": "native-gate-corrected",
+      "classification": "unresolved behavior; blocks dependent removal",
+      "message_excerpt": "  Expected: True\n  But was:  False\n"
+    }
+  ]
+}

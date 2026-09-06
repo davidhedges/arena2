@@ -1,0 +1,70 @@
+# Compatibility cleanup: evidence and execution record
+
+The user approved proceeding through the proposed cleanup until a product, saved-data, or support decision needs feedback. This document records that scope and the evidence; it does not authorize additional work. No remote environment, reset, or Unity batch-mode run is authorized.
+
+## Approved sequence
+
+1. Repair verification selection and require executed named coverage. Record baseline failures, saved Hub/equipment/schema, resolved animation/projectile/dungeon behavior, and a disposable local restore rehearsal.
+2. Remove four leaf clusters separately: unused collision wrapper; disabled character action-bar panel; obsolete Fireball/Icicle VFX and exclusive helpers; obsolete BOTTOM slot aliases while retaining normalization.
+3. Remove six ignored timing fields and their serialized values, comparing resolved output before/after. Retain the legacy LOS manifest reader until supported input files have been converted.
+4. Retire runtime migrations individually, only after inventorying/migrating supported databases and backups. Then consider the persisted `is_practice` mirror with a schema migration and regenerated clients.
+5. Present a concrete migration for seven saved old-owner feature selections. Do not silently change specialization, discipline, capacity, or abilities. Retain credential migration until supported clients preserve their identity after upgrade.
+6. Keep the active local-direct harness as an explicit supported path and update its probe callers. Retain semantic/fixed animation authoring and deprecated topology diagnostics while they have real consumers.
+
+## Deletion decisions and proof required
+
+| Candidate | Callers and persistence | Decision and deletion gate |
+| --- | --- | --- |
+| `resolve_arena_horizontal_collision` | No callers; forwards to the current Y-aware resolver. `surface_height_at` still serves raycasts. No schema/serialized data. | Remove only the unused wrapper; preserve current resolver and raycasts. Run authoritative collision/elevation tests and compile both module flavors. |
+| `CharacterActionBarPanel` | `Awake` disables it. No production construction, scene/prefab GUID references, or persisted backend contract. Four source tests still mention it. | Remove class/meta and replace obsolete panel assertions with checks of the current frozen-build UI. Compile/import in Unity and execute those named tests. |
+| `FireballVFX`, `IcicleVFX`, `ImpactBurstVFX` | Current controller constructs `WeaponProjectileVFX`; template factory has no registrations for the old classes. Impact burst and three VFX utility methods are exclusive dependencies. | Remove the closed class/helper cluster. Check symbol and serialized GUID references, preserve shared shaders/assets, execute current projectile lifecycle/prediction tests, and compare resolved VFX bindings. A source assertion alone is insufficient. |
+| `BOTTOM_01`…`BOTTOM_09` aliases | Only catalog synchronization calls the alias function. The embedded catalog has 32 canonical slots; lowercase authored IDs still require normalization. This is not the saved-loadout reader. | Remove aliases, keep trim/uppercase normalization; verify all embedded slots and invalid IDs through the production normalizer. No saved slot rewrite. |
+| Six ignored animation timing fields | Three fields in each of two structs, 238 serialized occurrences per field across six assets; 12/12/14 values are nonzero. Runtime resolves clip events/default blend duration instead. | Record actual resolved ground/air unlock, interrupt, blend, release, trim, clip identity, hand and layer; remove declarations/initializers/YAML together; require identical resolved inventory and native tests. Git reverses this asset-only cleanup. |
+| Old projectile LOS manifest field | Parser accepts old input but exporter omits it. `deny_unknown_fields` makes deleting the reader a breaking input change. | Keep until all supported manifests/backups are converted and old-input rejection is intentional. Test legacy import, canonical export, and reimport equivalence. |
+| Movement spelling, charge recovery, negative HOT, Hemorrhaging migrations | Startup/update paths read historical persisted rows; zero relevant rows in inspected local `arena` is only local evidence. | Keep until the supported environment/backup set is explicit, copies are migrated, a second migration is a no-op, restored copies start correctly, and current gameplay has no regression. |
+| Missing-owner admission fallback | A trust/admission boundary; old handoff producers may still omit ownership. | Inventory producers and in-flight match lifetimes. Require old payload rejection and valid owner/identity admission tests before removing. |
+| `is_practice` | Written into a public persisted table and generated bindings; current application readers use `instance_kind`. | Not a dead local variable. Require schema upgrade rehearsal without reset, module/client version compatibility, binding regeneration and practice/PvP route tests. |
+| Old moved-feature owners | Validation and materialization still accept/write them. Live Hub contains six old Temple Strike/Dreadspike selections and one old Slice selection. Carve can change parent discipline. | Migrate writers/readers and saved builds together only after reviewing exact before/after builds, capacity and frozen handoff. No automatic default build replacement. |
+| Credential fallback | Can be the only link from an installed client to its existing saved identity. | Keep until upgrade tests prove identity continuity, corrupt/missing/new-store behavior and token expiry/reconnect. Repo call counts cannot prove old clients are gone. |
+| Local-direct matchmaking | Used by local republish/probe tooling; special-movement probe still sends empty identity/token values. | Keep supported harness; fix actual callers. Test direct startup and Hub→disposable match separately. |
+| Semantic/fixed animation assignment | 95 LegacyMotion + 7 Fixed assignments, versus 15 Catalog and 17 NoAnimation. | Keep. Deleting it now changes 102 authored assignments. Conversion would be a separate reviewed content migration with motion/hand/layer/timing comparisons. |
+| Deprecated dungeon topologies | Ten have weight zero, but loader, tests and previews retain diagnostic use including processional-spine behavior. | Keep diagnostics; verify disabled entries are not selected for generation. Zero selection weight is not zero callers. |
+
+## Verification repair and baseline
+
+`EditModeVerification` requires completion, nonzero passing leaf results, a result for every discovered selected case, and execution for every requested selector. Skipped/inconclusive/failed, duplicate and unexpected results fail. Exact parameterized method selection is supported. The shared helper now backs build and authoring verification.
+
+Unity's group filter also matches assembly names. `Arena.EditModeTests` is both a namespace and an assembly; the filter must exclude `.dll` names or it can select the whole assembly. The initial broad run was stopped and is not counted. The corrected normal-Editor run executed 141 named tests: **140 passed, one existing closed-door test failed**, including **all 11 new verification-gate cases passing**. It returned process exit 1. The earlier fixed-fixture baseline executed **326: 298 passed, 28 failed**. These are different, partly overlapping selections, not totals to add together. The exact failure set is recorded in `compatibility-cleanup-native-baseline-2026-09-05.json`.
+
+The failure inventory distinguishes stale source/reflection assertions, asset/import diagnostics, test isolation symptoms, and unresolved behavior. Classification is not a waiver: unresolved nearby failures block behavior-dependent deletions, and the build gate remains red. Dungeon undo overflow, recipe eligibility, closed-door collision, mirrored/cached animation, and projectile hit-reaction failures must not be hidden by renaming tests or accepting a smaller passing subset.
+
+Server baseline and verification: **823 server + 25 Hub tests pass**. `ops/check-source-of-truth.sh` passes and now also runs the saved-state guard tests (25 Python tests total, including six new guard cases). A projectile source guard no longer silently returns success when its obsolete dispatcher file is missing; it reads required current controller/factory files. It supplements native behavior tests.
+
+`git diff --check` passes. Full `cargo fmt --check` reports an existing unrelated line-wrap difference in `server/src/melee.rs`; that file is unchanged. Formatting in the changed catalog test was corrected without formatting unrelated source.
+
+## Saved-state protection and restore limits
+
+Private evidence is under `Library/ArenaCompatibilityCleanup/2026-09-05/` (ignored; directory mode 700, snapshot mode 600). Do not commit snapshots or tokens. The durable snapshot protects 16 current v2 tables: players, armor selection, builds, selected/dormant specializations, discipline configuration, features, traits, cutover audit and definitions/catalogs. Queues, connections, active match handoffs and maintenance timers are intentionally excluded.
+
+The baseline contains 65 players/builds, 98 selected specializations, two dormant specializations, 67 discipline configurations, 189 feature selections and 16 trait selections. It also contains 65 armor selections, the cutover audit/contract and all equipment/build definitions. The baseline SHA-256 is `6bfe354ab30962ec911689d787a93801eda789bdbc306f60580eea6097db7cfb`.
+
+`ops/hub_state_snapshot.py snapshot --file <private-file>` takes two stable local reads; this is a quiescent logical snapshot, not an atomic online backup. `verify` permits newly created identities but rejects any changes, deletions or extra saved children for existing identities, any protected schema change and any catalog/audit change. The older skill guard queries removed `hub_player_loadout`; its failure is recorded and was not counted as protection.
+
+Restore rehearsal succeeded into a randomly named local disposable Hub database. A private Rust-only module copied the current Hub source, added an init-only typed SATS restore, and imported all 16 tables. Raw schemas and every restored row matched exactly. Its init refuses a populated Hub, no restore reducer was added, and it was never published over the original Hub. The returned exact disposable database identity was deleted and absence confirmed; the original Hub still matches the baseline. See `restore-rehearsal.json`, `restore-module/`, `restore-target/` and `restore-build.log` in private evidence.
+
+The restored state includes full identity values and cutover history, not just matching counts. This proves recovery of the protected durable rows into an isolated database. It does **not** prove rollback of an in-place schema upgrade, recovery of live matches, or that all remote/old backups are covered. Before any data/schema migration, retain a private copy outside disposable `Library`, identify every supported environment/backup, and rehearse its specific upgrade and recovery path. Do not deploy the private restore module to an existing database.
+
+## Skeptical maintainer review
+
+- Local absence is weak evidence for persistence migrations: other installations and old backups are invisible here. Keep compatibility until that support boundary is explicit.
+- Green tests can lie if nothing ran, the wrong assembly ran, an old file was skipped, or assertions only repeat source text. Named leaf evidence and behavioral tests address different parts of that problem; neither proves every live path.
+- The existing native failures show that “the tests cover it” was too confident. Keep failures visible, investigate neighboring failures before deletion, and do not use compatibility cleanup to silently change gameplay expectations.
+- A restore that reproduces 65 profiles is useful but incomplete. Multi-table reads need quiescence, credentials are separate, and schema rollback needs its own rehearsal.
+- Compatibility can be a supported feature with an unfortunate name. Animation assignments, local tooling, credential recovery and diagnostic topologies currently have consumers. Removing labels does not remove their maintenance obligation.
+- Separate commits are part of the safety argument: each leaf deletion can be reviewed/reverted without mixing it with saved-build decisions or unrelated gameplay fixes.
+
+## Current implementation status
+
+Item 1 is complete: verification rejects missing/incorrect coverage and returns a failing CLI exit code, exact native baseline failures are recorded, and the 16-table local restore rehearsal passed. Normal-Editor authoring verification executed **96 named tests, all passing**, returned exit 0, and captured **104 melee attacks and 906 resolved spell/profile comparisons** with no inventory, selectable-melee timing, or VFX ownership errors. The inventory includes stable clip GUID/file IDs and resolved playback/timing values for the upcoming field cleanup. Evidence: `authoring-before/inventory.json` and `tests.xml` in the private directory.
+
+Production gameplay, authored assets and saved builds were not changed by item 1. The known broad native failures remain explicit; this is not a green full-project baseline. The next already-approved item is the unused collision wrapper deletion, bounded to the wrapper and its validation.

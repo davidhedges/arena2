@@ -6299,23 +6299,26 @@ mod tests {
 
     #[test]
     fn migrated_projectile_spells_do_not_have_legacy_spell_vfx_branches() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../Assets/Arena/Runtime/Presentation/SpellVFXDispatcher.cs");
-        let source = match std::fs::read_to_string(&path) {
-            Ok(source) => source,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
-            Err(err) => panic!("failed to read {}: {err}", path.display()),
-        };
-
-        for migrated_spell in ["Fireball", "Icicle"] {
-            assert!(
-                !source.contains(format!("SpellIds.{migrated_spell} =>").as_str()),
-                "migrated projectile spell '{migrated_spell}' must not keep a SpellVFXDispatcher switch branch"
-            );
-            assert!(
-                !source.contains(format!("new {migrated_spell}VFX").as_str()),
-                "migrated projectile spell '{migrated_spell}' must instantiate through combat_vfx_cues, not SpellVFXDispatcher"
-            );
+        let presentation =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../Assets/Arena/Runtime/Presentation");
+        // Check the current entry points. A missing retired dispatcher proves no coverage.
+        for file in [
+            "CombatProjectileVisualController.cs",
+            "CombatVFXTemplateRegistry.cs",
+        ] {
+            let path = presentation.join(file);
+            let source = std::fs::read_to_string(&path).unwrap_or_else(|err| {
+                panic!("required current entry point {}: {err}", path.display())
+            });
+            for migrated_spell in ["Fireball", "Icicle"] {
+                assert!(
+                    !source.contains(format!("new {migrated_spell}VFX").as_str()),
+                    "{file} must not instantiate retired {migrated_spell}VFX"
+                );
+            }
+            if file == "CombatProjectileVisualController.cs" {
+                assert!(source.contains("new WeaponProjectileVFX("));
+            }
         }
     }
 

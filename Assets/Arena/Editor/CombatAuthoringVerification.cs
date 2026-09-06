@@ -6,7 +6,6 @@ using System.Linq;
 using Arena.Combat;
 using Arena.Presentation;
 using UnityEditor;
-using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
 
 namespace Arena.Editor
@@ -22,6 +21,7 @@ namespace Arena.Editor
             public bool testsCompleted;
             public int testsPassed;
             public int testsFailed;
+            public string[] executedTests = Array.Empty<string>();
             public List<string> failures = new();
             public List<string> inventoryErrors = new();
             public int selectableMeleeAbilitiesChecked;
@@ -62,6 +62,7 @@ namespace Arena.Editor
             public bool canBuildEventMirror;
             public bool eventMirrorMatches;
             public float startupTrimSeconds;
+            public float groundUnlockSeconds, airUnlockSeconds, groundInterruptSeconds, airInterruptSeconds, blendOutSeconds;
             public float[] effectiveEventSeconds = Array.Empty<float>();
             public int[] exportedHitMs = Array.Empty<int>();
             public int[] manifestHitMs = Array.Empty<int>();
@@ -82,6 +83,11 @@ namespace Arena.Editor
             public string archetype = "";
             public string school = "";
             public string castHand = "";
+            public string releaseClip = "", returnClip = "", holdEnterClip = "", holdLoopClip = "", holdExitClip = "";
+            public string leadInEnterClip = "", leadInLoopClip = "", leadInExitClip = "";
+            public string playbackLayer = "", presentationMode = "", effectiveCastOrigin = "";
+            public bool mirrorPresentation;
+            public float releaseSeconds, instantTrimSeconds, unlockSeconds, interruptSeconds, blendOutSeconds;
             public int generated;
             public int authored;
             public int matches;
@@ -111,45 +117,35 @@ namespace Arena.Editor
             // Load assets before the runner attributes import/OnValidate diagnostics to a test.
             // Existing invalid registry entries remain logged and are inventoried separately.
             Arena.Presentation.VFX.CombatVFXRegistry.LoadShared();
-            var runner = ScriptableObject.CreateInstance<TestRunnerApi>();
-            var callbacks = new Callbacks(report, Path.Combine(output, "tests.xml"));
-            runner.RegisterCallbacks(callbacks);
-            try
+            const string movement = "Arena.Tests.Editor.MovementRegressionTests.";
+            string[] selectors =
             {
-                const string movement = "Arena.Tests.Editor.MovementRegressionTests.";
-                runner.Execute(new ExecutionSettings(new Filter
-                {
-                    testMode = TestMode.EditMode,
-                    assemblyNames = new[] { "Arena.EditModeTests" },
-                    testNames = new[]
-                    {
-                        movement + "CombatAnimationSetEditor_ManifestImportUsesEventsOrLegacyFallback",
-                        movement + "CombatAnimationSetEditor_ReadsLegacyProjectileLosButDoesNotExportIt",
-                        movement + "CombatAnimationSet_MeleeExportUsesStrikeHitEventBeforeAuthoredHitWindows",
-                        movement + "CombatAnimationSet_StartupTrimShiftsPlaybackAndExportOntoSameTimeline",
-                        movement + "CombatAnimationSet_StartupTrimAtContactProducesValidZeroDelayHit",
-                        movement + "CombatAnimationSet_StartupTrimUpdatesCompatibilityHitWindowMirror",
-                        movement + "CombatAnimationSet_HitWindowMirrorTracksEveryStrikeHitEvent",
-                        movement + "CombatAnimationSet_PhasedMeleeExportOffsetsStrikeHitEventByStartAndLoop",
-                        movement + "CombatAnimationSet_PhasedMeleeExportReadsStrikeHitEventsFromAllPhases",
-                        movement + "CombatAnimationSet_PhasedMeleeExportHonorsLoopPhaseReadyMarker",
-                        movement + "CombatAnimationSet_StartEndPhasedMeleeExportSkipsMissingLoop",
-                        movement + "CombatAnimationSet_LoopEndPhasedMeleeExportUsesResolvedStartAndLoop",
-                        "Arena.Tests.Editor.CombatVfxCueResolverTests.IceSpikes_LegacyCueIsOnlyRedundantWhenAbilityIdentityIsPresent",
-                        "Arena.Tests.Editor.SpellVfxGeneratorTests.GeneratedCastHand_FollowsAnimationOriginMirroringAndLegacyInference",
-                        "Arena.Tests.Editor.SpellVfxGeneratorTests.SchoolVfxSets_AreEditorOnlyAuthoringAssets",
-                        "Arena.Tests.Editor.SpellVfxGeneratorTests.SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource",
-                        "Arena.Tests.Editor.SpellCueCatalogWriterTests",
-                        "Arena.Tests.Editor.MeleeAuthoringDriftTests",
-                        "Arena.Tests.Editor.VfxOwnershipTests",
-                    },
-                }) { runSynchronously = true });
-            }
-            finally
-            {
-                runner.UnregisterCallbacks(callbacks);
-                UnityEngine.Object.DestroyImmediate(runner);
-            }
+                movement + "CombatAnimationSetEditor_ManifestImportUsesEventsOrLegacyFallback",
+                movement + "CombatAnimationSetEditor_ReadsLegacyProjectileLosButDoesNotExportIt",
+                movement + "CombatAnimationSet_MeleeExportUsesStrikeHitEventBeforeAuthoredHitWindows",
+                movement + "CombatAnimationSet_StartupTrimShiftsPlaybackAndExportOntoSameTimeline",
+                movement + "CombatAnimationSet_StartupTrimAtContactProducesValidZeroDelayHit",
+                movement + "CombatAnimationSet_StartupTrimUpdatesCompatibilityHitWindowMirror",
+                movement + "CombatAnimationSet_HitWindowMirrorTracksEveryStrikeHitEvent",
+                movement + "CombatAnimationSet_PhasedMeleeExportOffsetsStrikeHitEventByStartAndLoop",
+                movement + "CombatAnimationSet_PhasedMeleeExportReadsStrikeHitEventsFromAllPhases",
+                movement + "CombatAnimationSet_PhasedMeleeExportHonorsLoopPhaseReadyMarker",
+                movement + "CombatAnimationSet_StartEndPhasedMeleeExportSkipsMissingLoop",
+                movement + "CombatAnimationSet_LoopEndPhasedMeleeExportUsesResolvedStartAndLoop",
+                "Arena.Tests.Editor.CombatVfxCueResolverTests.IceSpikes_LegacyCueIsOnlyRedundantWhenAbilityIdentityIsPresent",
+                "Arena.Tests.Editor.SpellVfxGeneratorTests.GeneratedCastHand_FollowsAnimationOriginMirroringAndLegacyInference",
+                "Arena.Tests.Editor.SpellVfxGeneratorTests.SchoolVfxSets_AreEditorOnlyAuthoringAssets",
+                "Arena.Tests.Editor.SpellVfxGeneratorTests.SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource",
+                "Arena.Tests.Editor.SpellCueCatalogWriterTests",
+                "Arena.Tests.Editor.MeleeAuthoringDriftTests",
+                "Arena.Tests.Editor.VfxOwnershipTests",
+            };
+            var tests = EditModeVerification.Run(selectors, Path.Combine(output, "tests.xml"));
+            report.testsCompleted = tests.Completed;
+            report.testsPassed = tests.Passed;
+            report.testsFailed = tests.Failed;
+            report.executedTests = tests.ExecutedNames;
+            report.failures.AddRange(tests.Errors());
 
             CaptureMelee(report);
             try { report.selectableMeleeErrors = CheckSelectableMeleeTiming(out report.selectableMeleeAbilitiesChecked); }
@@ -173,12 +169,31 @@ namespace Arena.Editor
                 + $"{report.selectableMeleeErrors.Count} timing errors; {report.melee.Count} melee attacks, "
                 + $"{report.vfx.Count} VFX comparisons, {report.generatedVfxCuesChecked} generated cues checked, "
                 + $"{report.vfxOwnershipErrors.Count} VFX ownership errors. Report: {output}";
-            if (!report.testsCompleted || report.testsFailed > 0 || report.inventoryErrors.Count > 0
+            if (!report.testsCompleted || report.testsPassed == 0 || report.testsFailed > 0 || report.failures.Count > 0 || report.inventoryErrors.Count > 0
                 || report.selectableMeleeErrors.Count > 0 || report.vfxOwnershipErrors.Count > 0)
-                Debug.LogError(summary);
+                throw new InvalidOperationException(summary + "\n" + string.Join("\n", report.failures));
             else
                 Debug.Log(summary);
         }
+
+        public static void RunFromCommandLine()
+        {
+            if (Application.isBatchMode) throw new InvalidOperationException("Normal Unity Editor only.");
+            try { Run(); EditorApplication.Exit(0); }
+            catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+        }
+
+        internal static string ClipIdentity(AnimationClip? clip)
+        {
+            if (clip == null) return "";
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(clip, out string guid, out long fileId))
+                throw new InvalidDataException("Resolved clip is not a saved asset: " + clip.name);
+            return guid + ":" + fileId;
+        }
+
+        internal static float RuntimeLowerBodyBlendOutSeconds => (float)typeof(CombatAnimationSet).Assembly
+            .GetType("Arena.Presentation.CombatActionPlaybackController", throwOnError: true)!
+            .GetField("DefaultLowerBodyBlendOutSeconds")!.GetRawConstantValue();
 
         internal static List<string> CheckSelectableMeleeTiming(out int checkedAbilities)
         {
@@ -286,6 +301,11 @@ namespace Arena.Editor
                             eventMirrorMatches = hasMirror && authoredMirror != null && authoredMirror.Length == mirror.Length
                                 && authoredMirror.Zip(mirror, (a, b) => Mathf.Approximately(a.timeNormalized, b.timeNormalized)).All(equal => equal),
                             startupTrimSeconds = attack.ResolveStartupTrimSeconds(), effectiveEventSeconds = times,
+                            groundUnlockSeconds = attack.ResolveLowerBodyUnlockAtSeconds(true),
+                            airUnlockSeconds = attack.ResolveLowerBodyUnlockAtSeconds(false),
+                            groundInterruptSeconds = attack.ResolveVisualInterruptibleAtSeconds(true),
+                            airInterruptSeconds = attack.ResolveVisualInterruptibleAtSeconds(false),
+                            blendOutSeconds = attack.ResolveLowerBodyBlendOutSeconds(RuntimeLowerBodyBlendOutSeconds),
                             exportedHitMs = strike.hit_windows.Select(hit => hit.impact_delay_ms).ToArray(),
                             manifestHitMs = old?.hit_windows.Select(hit => hit.impact_delay_ms).ToArray() ?? Array.Empty<int>(),
                             exportedRecoveryMs = strike.recovery_ms, manifestRecoveryMs = old?.recovery_ms ?? -1,
@@ -301,26 +321,6 @@ namespace Arena.Editor
             }
         }
 
-        private sealed class Callbacks : ICallbacks
-        {
-            private readonly Report _report;
-            private readonly string _xml;
-            public Callbacks(Report report, string xml) { _report = report; _xml = xml; }
-            public void RunStarted(ITestAdaptor tests) { }
-            public void TestStarted(ITestAdaptor test) { }
-            public void TestFinished(ITestResultAdaptor result)
-            {
-                if (!result.HasChildren && result.TestStatus == TestStatus.Failed)
-                    _report.failures.Add(result.FullName + ": " + result.Message + "\n" + result.StackTrace);
-            }
-            public void RunFinished(ITestResultAdaptor result)
-            {
-                _report.testsCompleted = true;
-                _report.testsPassed = result.PassCount;
-                _report.testsFailed = result.FailCount;
-                TestRunnerApi.SaveResultToFile(result, _xml);
-            }
-        }
     }
 
     internal sealed partial class SpellAuthoringWindow
@@ -353,6 +353,21 @@ namespace Arena.Editor
                         animationResolved = resolved, animationAssignment = assignment,
                         archetype = preview.Archetype?.ToString() ?? "UNSUPPORTED",
                         school = preview.School, castHand = preview.CastHandAnchor,
+                        releaseClip = CombatAuthoringVerification.ClipIdentity(animation.clip),
+                        returnClip = CombatAuthoringVerification.ClipIdentity(animation.returnToHold),
+                        holdEnterClip = CombatAuthoringVerification.ClipIdentity(animation.holdOverride.enter),
+                        holdLoopClip = CombatAuthoringVerification.ClipIdentity(animation.holdOverride.idleLoop),
+                        holdExitClip = CombatAuthoringVerification.ClipIdentity(animation.holdOverride.exit),
+                        leadInEnterClip = CombatAuthoringVerification.ClipIdentity(animation.castTimeLeadIn.enter),
+                        leadInLoopClip = CombatAuthoringVerification.ClipIdentity(animation.castTimeLeadIn.idleLoop),
+                        leadInExitClip = CombatAuthoringVerification.ClipIdentity(animation.castTimeLeadIn.exit),
+                        playbackLayer = animation.playbackLayer.ToString(), presentationMode = animation.presentationMode.ToString(),
+                        effectiveCastOrigin = animation.EffectiveCastOrigin.ToString(), mirrorPresentation = animation.mirrorPresentation,
+                        releaseSeconds = resolved ? animation.ResolveReleaseOffsetSeconds() : 0f,
+                        instantTrimSeconds = resolved ? animation.ResolveInstantCastStartupTrimSeconds(mode == SpellAnimationArchetype.Instant) : 0f,
+                        unlockSeconds = resolved ? animation.ResolveLowerBodyUnlockAtSeconds() : 0f,
+                        interruptSeconds = resolved ? animation.ResolveVisualInterruptibleAtSeconds() : 0f,
+                        blendOutSeconds = animation.ResolveLowerBodyBlendOutSeconds(CombatAuthoringVerification.RuntimeLowerBodyBlendOutSeconds),
                         generated = preview.Cues.Count, authored = catalog.Count,
                         ambiguous = new List<string>(ambiguous), uninferrable = uninferrable.Select(DescribeCatalog).ToList(),
                         notes = new List<string>(preview.SlotNotes),
