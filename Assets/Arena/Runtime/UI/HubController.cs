@@ -18,7 +18,6 @@ using UnityEngine.UI;
 
 namespace Arena.UI
 {
-    [ExecuteAlways]
     public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
@@ -126,12 +125,14 @@ namespace Arena.UI
 
         private void OnEnable()
         {
-            if (Application.isPlaying)
-            {
-                RuntimeUiEscapeRouter.Register(this);
-                if (GetComponent<HubScreen>() == null)
-                    gameObject.AddComponent<HubScreen>();
-            }
+            // Scene restoration after Play must not run runtime layout/cleanup
+            // against authored objects and leave Hub.unity modified.
+            if (!Application.IsPlaying(gameObject))
+                return;
+
+            RuntimeUiEscapeRouter.Register(this);
+            if (GetComponent<HubScreen>() == null)
+                gameObject.AddComponent<HubScreen>();
             RemoveGeneratedCombinedCharacterPreview();
             Resolve();
             WireButtons();
@@ -148,6 +149,9 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!Application.IsPlaying(gameObject))
+                return;
+
             RemoveGeneratedCombinedCharacterPreview();
             Resolve();
             if (!_wired)

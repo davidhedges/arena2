@@ -15,7 +15,6 @@ using UnityEngine.UI;
 
 namespace Arena.Editor
 {
-    [InitializeOnLoad]
     internal static class HubSceneAuthoringBuilder
     {
         private const string HubSceneName = "Hub";
@@ -23,13 +22,6 @@ namespace Arena.Editor
         private const float ShowcaseAvatarHeight = 2.85f;
         private const float ShowcaseLift = 0.92f;
         private const float ShowcaseDefaultYaw = 180f;
-
-        static HubSceneAuthoringBuilder()
-        {
-            EditorApplication.delayCall += AutoBuildIfHubOpen;
-            EditorSceneManager.sceneOpened += (_, _) => EditorApplication.delayCall += AutoBuildIfHubOpen;
-            EditorSceneManager.activeSceneChangedInEditMode += (_, _) => EditorApplication.delayCall += AutoBuildIfHubOpen;
-        }
 
         [MenuItem("Tools/Hub/Rebuild Authored Hub")]
         private static void Rebuild()
@@ -48,7 +40,10 @@ namespace Arena.Editor
             Build(scene);
         }
 
-        private static void AutoBuildIfHubOpen()
+        // Authoring changes are explicit: opening/restoring Hub or reloading
+        // scripts must not rewrite the scene and trigger a save prompt.
+        [MenuItem("Tools/Hub/Sync Authored Hub")]
+        private static void SyncAuthoredHub()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
