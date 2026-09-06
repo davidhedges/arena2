@@ -27,7 +27,6 @@ namespace Arena.Tests.Editor
         private const string HubControllerPath = "Assets/Arena/Runtime/UI/HubController.cs";
         private const string CharacterCreationControllerPath = "Assets/Arena/Runtime/UI/CharacterCreationController.cs";
         private const string ActionTooltipResolverPath = "Assets/Arena/Runtime/Combat/ActionTooltipResolver.cs";
-        private const string CharacterActionBarPanelPath = "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs";
         private const string ActionBarSlotViewFactoryPath = "Assets/Arena/Runtime/UI/ActionBarSlotViewFactory.cs";
         private const string ActionBarDragDropPath = "Assets/Arena/Runtime/UI/ActionBarDragDrop.cs";
         private const string ActionBarLayoutPath = "Assets/Arena/Runtime/UI/ActionBarLayout.cs";
@@ -506,9 +505,10 @@ namespace Arena.Tests.Editor
             Assert.That(contracts, Does.Not.Contain("KnowsSpell"));
             Assert.That(contracts, Does.Not.Contain("IsSpellAssignmentEnabled"));
 
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("enabled = false"));
-            Assert.That(panel, Does.Not.Contain("AbilityCatalog.Iter()"));
+            string hud = File.ReadAllText(HudControllerPath);
+            Assert.That(hud, Does.Contain("ResolveSpellBarActions"));
+            Assert.That(hud, Does.Contain("ResolveTechniqueBarActions"));
+            Assert.That(hud, Does.Not.Contain("AbilityCatalog.Iter()"));
         }
 
         [Test]
@@ -564,8 +564,6 @@ namespace Arena.Tests.Editor
             Assert.That(dispatcher, Does.Contain("FixedActionIds.Dodge"));
             Assert.That(dispatcher, Does.Contain("FixedActionIds.Parry"));
 
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("enabled = false"));
         }
 
         [Test]
@@ -612,14 +610,13 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void LegacyActionBarEditor_IsDisabledAndCannotWriteCompatibilityRows()
+        public void GameplayActionBars_CannotWriteRetiredRows()
         {
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            string hud = File.ReadAllText(HudControllerPath);
             string dragDrop = File.ReadAllText(ActionBarDragDropPath);
 
-            Assert.That(panel, Does.Contain("enabled = false"));
-            Assert.That(panel, Does.Not.Contain("RuntimeInitializeOnLoadMethod"));
-            Assert.That(panel, Does.Not.Contain("AbilityCatalog.Iter()"));
+            Assert.That(hud, Does.Not.Contain("AssignCharacterActionBar"));
+            Assert.That(hud, Does.Not.Contain("ClearCharacterActionBar"));
             Assert.That(dragDrop, Does.Not.Contain("AssignCharacterActionBar"));
             Assert.That(dragDrop, Does.Not.Contain("ClearCharacterActionBar"));
         }

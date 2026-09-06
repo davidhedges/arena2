@@ -59,8 +59,8 @@ namespace Arena.Tests.Editor
         {
             string disciplines = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
-            string actionBar = File.ReadAllText(
-                "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs");
+            string hud = File.ReadAllText(
+                "Assets/Arena/Runtime/UI/HudController.cs");
             string dragDrop = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/ActionBarDragDrop.cs");
             string equipment = File.ReadAllText(
@@ -71,8 +71,9 @@ namespace Arena.Tests.Editor
             Assert.That(disciplines, Does.Contain("TraitCapacityText"));
             Assert.That(disciplines, Does.Not.Contain("PRIMARY"));
             Assert.That(disciplines, Does.Not.Contain("SECONDARY"));
-            Assert.That(actionBar, Does.Contain("enabled = false"));
-            Assert.That(actionBar, Does.Not.Contain("AssignCharacterActionBar"));
+            Assert.That(hud, Does.Contain("ResolveSpellBarActions"));
+            Assert.That(hud, Does.Contain("ResolveTechniqueBarActions"));
+            Assert.That(hud, Does.Not.Contain("AssignCharacterActionBar"));
             Assert.That(dragDrop, Does.Not.Contain("AssignCharacterActionBar"));
             Assert.That(dragDrop, Does.Not.Contain("ClearCharacterActionBar"));
             Assert.That(equipment, Does.Contain("hub.SaveCombatBuild(updated)"));
