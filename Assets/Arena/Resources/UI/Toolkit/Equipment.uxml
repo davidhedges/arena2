@@ -1,16 +1,13 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <!-- One-way UI Toolkit translation of the approved browser prototype at
-         docs/ui-prototypes/equipment. The center remains transparent so the
-         Hub camera's live avatar is the armor showcase. -->
-    <Style src="Disciplines.uss" />
+    <Style src="HubCommon.uss" />
     <Style src="Equipment.uss" />
 
-    <ui:VisualElement name="EquipmentScreen" class="equipment-screen">
+    <ui:VisualElement name="EquipmentScreen" class="arena-hub-ui equipment-screen">
         <ui:VisualElement class="equipment-veil" picking-mode="Ignore" />
         <ui:VisualElement class="equipment-vignette" picking-mode="Ignore" />
 
         <ui:VisualElement name="TopBar" class="topbar">
-            <ui:Button name="NavPlay" class="brand-block">
+            <ui:Button name="NavPlay" class="brand-block" tooltip="Return to Hub">
                 <ui:VisualElement class="brand-mark" picking-mode="Ignore">
                     <ui:VisualElement class="brand-diamond" />
                     <ui:VisualElement class="brand-spear brand-spear--one" />
@@ -18,28 +15,20 @@
                 </ui:VisualElement>
                 <ui:Label class="brand-word" text="ARENA" picking-mode="Ignore" />
             </ui:Button>
-
             <ui:VisualElement class="primary-nav">
-                <ui:Button name="NavPlayTab" class="nav-item"><ui:Label text="PLAY" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="NavDisciplines" class="nav-item"><ui:Label text="DISCIPLINES" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="NavEquipment" class="nav-item is-active"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="APPEARANCE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="CAREER" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="STORE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavPlayTab" class="nav-item " text="HUB" />
+                <ui:Button name="NavDisciplines" class="nav-item " text="DISCIPLINES" />
+                <ui:Button name="NavEquipment" class="nav-item is-active" text="EQUIPMENT" />
             </ui:VisualElement>
-
             <ui:VisualElement class="topbar-tools">
-                <ui:VisualElement class="currency currency--gold"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="G" /></ui:VisualElement><ui:Label text="1,250" /></ui:VisualElement>
-                <ui:VisualElement class="currency currency--arcane"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="A" /></ui:VisualElement><ui:Label text="340" /></ui:VisualElement>
-                <ui:Button class="tool-button"><ui:Label class="tool-people" text="●●" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="tool-button"><ui:Label class="tool-envelope" text="◇" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="SettingsButton" class="tool-button"><ui:Label class="tool-cog" text="✦" picking-mode="Ignore" /></ui:Button>
+                <ui:Label class="nav-caption" text="PREPARE FOR BATTLE" picking-mode="Ignore" />
+                <ui:Button name="SettingsButton" class="tool-button" text="SETTINGS" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement class="page-heading equipment-page-heading">
-            <ui:Label name="PageKicker" class="heading-kicker" text="ARMOR LOADOUT" picking-mode="Ignore" />
-            <ui:Label name="PageTitle" class="page-title" text="CHOOSE YOUR ARMOR" picking-mode="Ignore" />
+            <ui:Label name="PageKicker" class="heading-kicker" text="THE ARMORY" picking-mode="Ignore" />
+            <ui:Label name="PageTitle" class="page-title" text="Equipment" picking-mode="Ignore" />
             <ui:Label name="PageSubtitle" class="page-subtitle" text="Balance protection and mobility. Armor is equipped as a complete set." picking-mode="Ignore" />
             <ui:VisualElement class="equipment-mode-toggle">
                 <ui:Button name="ArmorMode" class="equipment-mode-button is-selected" text="ARMOR" />
@@ -51,8 +40,8 @@
             <ui:VisualElement name="ArmorSelectionPanel" class="selection-panel panel-surface">
                 <ui:VisualElement class="panel-heading">
                     <ui:VisualElement>
-                        <ui:Label class="section-kicker" text="PROTECTION CLASS" />
-                        <ui:Label class="section-heading" text="ARMOR TIER" />
+                        <ui:Label class="section-kicker" text="01 / PROTECTION" />
+                        <ui:Label class="section-heading" text="Armor class" />
                     </ui:VisualElement>
                     <ui:Label class="availability" text="ALL AVAILABLE" />
                 </ui:VisualElement>
@@ -60,19 +49,19 @@
                 <ui:VisualElement class="tier-toggle">
                     <ui:Button name="TierLight" class="tier-button">
                         <ui:VisualElement class="tier-selected-gem" picking-mode="Ignore" />
-                        <ui:Label class="tier-glyph tier-glyph--light" text="◇" picking-mode="Ignore" />
+                        <ui:Label class="tier-glyph tier-glyph--light" text="I" picking-mode="Ignore" />
                         <ui:Label class="tier-name" text="LIGHT" picking-mode="Ignore" />
                         <ui:Label class="tier-note" text="UNRESTRICTED" picking-mode="Ignore" />
                     </ui:Button>
                     <ui:Button name="TierMedium" class="tier-button">
                         <ui:VisualElement class="tier-selected-gem" picking-mode="Ignore" />
-                        <ui:Label class="tier-glyph tier-glyph--medium" text="◆" picking-mode="Ignore" />
+                        <ui:Label class="tier-glyph tier-glyph--medium" text="II" picking-mode="Ignore" />
                         <ui:Label class="tier-name" text="MEDIUM" picking-mode="Ignore" />
                         <ui:Label class="tier-note" text="LEATHER" picking-mode="Ignore" />
                     </ui:Button>
                     <ui:Button name="TierHeavy" class="tier-button tier-button--last">
                         <ui:VisualElement class="tier-selected-gem" picking-mode="Ignore" />
-                        <ui:Label class="tier-glyph tier-glyph--heavy" text="⬟" picking-mode="Ignore" />
+                        <ui:Label class="tier-glyph tier-glyph--heavy" text="III" picking-mode="Ignore" />
                         <ui:Label class="tier-name" text="HEAVY" picking-mode="Ignore" />
                         <ui:Label class="tier-note" text="PLATE" picking-mode="Ignore" />
                     </ui:Button>
@@ -81,8 +70,8 @@
                 <ui:VisualElement class="section-rule" picking-mode="Ignore" />
                 <ui:VisualElement class="set-list-heading">
                     <ui:VisualElement>
-                        <ui:Label class="section-kicker" text="COMPLETE LOADOUTS" />
-                        <ui:Label class="section-heading" text="ARMOR SET" />
+                        <ui:Label class="section-kicker" text="02 / COLLECTION" />
+                        <ui:Label class="section-heading" text="Choose a set" />
                     </ui:VisualElement>
                     <ui:Label name="SetCount" class="set-count" text="0 SETS" />
                 </ui:VisualElement>
@@ -100,7 +89,7 @@
             <ui:VisualElement name="WeaponSelectionPanel" class="selection-panel panel-surface equipment-panel-hidden">
                 <ui:VisualElement class="panel-heading">
                     <ui:VisualElement>
-                        <ui:Label class="section-kicker" text="DEFAULT COMBAT DISCIPLINE" />
+                        <ui:Label class="section-kicker" text="YOUR STARTING DISCIPLINE" />
                         <ui:Label name="WeaponDisciplineName" class="section-heading" text="WEAPONS" />
                     </ui:VisualElement>
                     <ui:Label name="WeaponCount" class="availability" text="0 AVAILABLE" />
@@ -120,7 +109,7 @@
                     <ui:Label class="note-glyph" text="◆" />
                     <ui:VisualElement class="note-copy">
                         <ui:Label class="note-title" text="DISCIPLINE-BOUND ARSENAL" />
-                        <ui:Label name="WeaponRuleNote" class="note-body" text="This edits the default combat discipline's saved weapon configuration." />
+                        <ui:Label name="WeaponRuleNote" class="note-body" text="Weapons for the discipline you enter battle with." />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -135,102 +124,106 @@
                 <ui:VisualElement class="showcase-caption" picking-mode="Ignore">
                     <ui:Label name="ShowcaseTier" class="showcase-tier" text="LIGHT ARMOR" />
                     <ui:Label name="ShowcaseName" class="showcase-name" text="PEASANT ATTIRE" />
-                    <ui:Label class="showcase-help" text="LIVE CHARACTER PREVIEW · DRAG TO ROTATE" />
+                    <ui:Label class="showcase-help" text="DRAG TO ROTATE  ·  ARROWS TO BROWSE" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement name="ArmorDetailsPanel" class="details-panel panel-surface">
-                <ui:VisualElement class="details-heading">
-                    <ui:Label class="section-kicker" text="SELECTED LOADOUT" />
-                    <ui:Label name="DetailsName" class="details-name" text="PEASANT ATTIRE" />
-                    <ui:Label name="DetailsFlavor" class="details-flavor" text="Simple clothing that leaves movement and spellcasting completely unimpeded." />
-                </ui:VisualElement>
-
-                <ui:VisualElement class="protection-summary">
-                    <ui:VisualElement class="summary-emblem" picking-mode="Ignore"><ui:Label name="SummaryGlyph" text="◇" /></ui:VisualElement>
-                    <ui:VisualElement class="summary-copy" picking-mode="Ignore">
-                        <ui:Label name="SummaryTier" class="summary-tier" text="LIGHT ARMOR" />
-                        <ui:Label name="SummaryHeadline" class="summary-headline" text="UNRESTRICTED MOBILITY" />
+                <ui:ScrollView class="details-scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
+                    <ui:VisualElement class="details-heading">
+                        <ui:Label class="section-kicker" text="THE DETAILS" />
+                        <ui:Label name="DetailsName" class="details-name" text="PEASANT ATTIRE" />
+                        <ui:Label name="DetailsFlavor" class="details-flavor" text="Simple clothing that leaves movement and spellcasting completely unimpeded." />
                     </ui:VisualElement>
-                    <ui:Label name="EquippedChip" class="equipped-chip" text="EQUIPPED" />
-                </ui:VisualElement>
 
-                <ui:VisualElement class="effect-heading" picking-mode="Ignore"><ui:Label text="DEFENSE" /><ui:Label text="SET EFFECT" /></ui:VisualElement>
-                <ui:VisualElement class="effect-row effect-row--positive" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="⬟" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="PHYSICAL RESISTANCE" /><ui:Label class="effect-description" text="Reduces incoming physical damage" /></ui:VisualElement>
-                    <ui:Label name="PhysicalResistance" class="effect-value" text="0%" />
-                </ui:VisualElement>
-                <ui:VisualElement class="effect-row effect-row--positive" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="✦" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MAGICAL RESISTANCE" /><ui:Label class="effect-description" text="Reduces incoming magical damage" /></ui:VisualElement>
-                    <ui:Label name="MagicalResistance" class="effect-value" text="0%" />
-                </ui:VisualElement>
+                    <ui:VisualElement class="protection-summary">
+                        <ui:VisualElement class="summary-emblem" picking-mode="Ignore"><ui:Label name="SummaryGlyph" text="I" /></ui:VisualElement>
+                        <ui:VisualElement class="summary-copy" picking-mode="Ignore">
+                            <ui:Label name="SummaryTier" class="summary-tier" text="LIGHT ARMOR" />
+                            <ui:Label name="SummaryHeadline" class="summary-headline" text="UNRESTRICTED MOBILITY" />
+                        </ui:VisualElement>
+                        <ui:Label name="EquippedChip" class="equipped-chip" text="EQUIPPED" />
+                    </ui:VisualElement>
 
-                <ui:VisualElement class="effect-heading effect-heading--tradeoffs" picking-mode="Ignore"><ui:Label text="TRADEOFFS" /><ui:Label text="SET EFFECT" /></ui:VisualElement>
-                <ui:VisualElement name="MoveSpeedRow" class="effect-row effect-row--negative" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="➤" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MOVE SPEED" /><ui:Label class="effect-description" text="Slower ground movement" /></ui:VisualElement>
-                    <ui:Label name="MoveSpeed" class="effect-value" text="−10%" />
-                </ui:VisualElement>
-                <ui:VisualElement name="CastSpeedRow" class="effect-row effect-row--negative" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="⌛" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="CAST SPEED" /><ui:Label class="effect-description" text="Instant casts are unaffected" /></ui:VisualElement>
-                    <ui:Label name="CastSpeed" class="effect-value" text="−20%" />
-                </ui:VisualElement>
-                <ui:Label name="NoTradeoffs" class="no-tradeoffs" text="No movement or casting penalties." />
+                    <ui:VisualElement class="effect-heading" picking-mode="Ignore"><ui:Label text="DEFENSE" /><ui:Label text="SET EFFECT" /></ui:VisualElement>
+                    <ui:VisualElement class="effect-row effect-row--positive" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="⬟" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="PHYSICAL RESISTANCE" /><ui:Label class="effect-description" text="Reduces incoming physical damage" /></ui:VisualElement>
+                        <ui:Label name="PhysicalResistance" class="effect-value" text="0%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="effect-row effect-row--positive" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="✦" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MAGICAL RESISTANCE" /><ui:Label class="effect-description" text="Reduces incoming magical damage" /></ui:VisualElement>
+                        <ui:Label name="MagicalResistance" class="effect-value" text="0%" />
+                    </ui:VisualElement>
 
-                <ui:VisualElement class="loadout-meta" picking-mode="Ignore">
-                    <ui:VisualElement class="loadout-meta-block loadout-meta-primary"><ui:Label class="meta-label" text="LOADOUT" /><ui:Label name="PieceCount" class="meta-value" text="4 / 4 PIECES" /></ui:VisualElement>
-                    <ui:VisualElement class="loadout-meta-block"><ui:Label class="meta-label" text="AVAILABILITY" /><ui:Label class="meta-value" text="UNLOCKED" /></ui:VisualElement>
-                </ui:VisualElement>
+                    <ui:VisualElement class="effect-heading effect-heading--tradeoffs" picking-mode="Ignore"><ui:Label text="TRADEOFFS" /><ui:Label text="SET EFFECT" /></ui:VisualElement>
+                    <ui:VisualElement name="MoveSpeedRow" class="effect-row effect-row--negative" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="➤" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MOVE SPEED" /><ui:Label class="effect-description" text="Slower ground movement" /></ui:VisualElement>
+                        <ui:Label name="MoveSpeed" class="effect-value" text="−10%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="CastSpeedRow" class="effect-row effect-row--negative" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="⌛" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="CAST SPEED" /><ui:Label class="effect-description" text="Instant casts are unaffected" /></ui:VisualElement>
+                        <ui:Label name="CastSpeed" class="effect-value" text="−20%" />
+                    </ui:VisualElement>
+                    <ui:Label name="NoTradeoffs" class="no-tradeoffs" text="No movement or casting penalties." />
 
-                <ui:Button name="EquipButton" class="equip-button" text="◆  EQUIP COMPLETE SET  ◆" />
+                    <ui:VisualElement class="loadout-meta" picking-mode="Ignore">
+                        <ui:VisualElement class="loadout-meta-block loadout-meta-primary"><ui:Label class="meta-label" text="LOADOUT" /><ui:Label name="PieceCount" class="meta-value" text="4 / 4 PIECES" /></ui:VisualElement>
+                        <ui:VisualElement class="loadout-meta-block"><ui:Label class="meta-label" text="AVAILABILITY" /><ui:Label class="meta-value" text="UNLOCKED" /></ui:VisualElement>
+                    </ui:VisualElement>
+
+                </ui:ScrollView>
+                <ui:Button name="EquipButton" class="equip-button primary-button" text="EQUIP ARMOR SET" />
                 <ui:Button name="BackButton" class="back-button" text="BACK TO HUB" />
             </ui:VisualElement>
 
             <ui:VisualElement name="WeaponDetailsPanel" class="details-panel panel-surface equipment-panel-hidden">
-                <ui:VisualElement class="details-heading">
-                    <ui:Label class="section-kicker" text="SELECTED WEAPON LOADOUT" />
-                    <ui:Label name="WeaponDetailsName" class="details-name" text="WEAPON" />
-                    <ui:Label name="WeaponDetailsFlavor" class="details-flavor" text="Choose a weapon allowed by the default combat discipline." />
-                </ui:VisualElement>
-
-                <ui:VisualElement class="weapon-summary">
-                    <ui:VisualElement name="WeaponDetailsIcon" class="weapon-details-icon" picking-mode="Ignore" />
-                    <ui:VisualElement class="summary-copy" picking-mode="Ignore">
-                        <ui:Label name="WeaponDetailsDiscipline" class="summary-tier" text="DEFAULT COMBAT DISCIPLINE" />
-                        <ui:Label name="WeaponDetailsKind" class="summary-headline" text="WEAPON TYPE" />
+                <ui:ScrollView class="details-scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
+                    <ui:VisualElement class="details-heading">
+                        <ui:Label class="section-kicker" text="SELECTED WEAPON LOADOUT" />
+                        <ui:Label name="WeaponDetailsName" class="details-name" text="WEAPON" />
+                        <ui:Label name="WeaponDetailsFlavor" class="details-flavor" text="Choose a weapon allowed by the default combat discipline." />
                     </ui:VisualElement>
-                    <ui:Label name="WeaponEquippedChip" class="equipped-chip" text="EQUIPPED" />
-                </ui:VisualElement>
 
-                <ui:VisualElement class="effect-heading" picking-mode="Ignore"><ui:Label text="LOADOUT" /><ui:Label text="SELECTION" /></ui:VisualElement>
-                <ui:VisualElement class="weapon-loadout-row" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="◆" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MAIN HAND" /><ui:Label name="WeaponMainName" class="effect-description" text="None selected" /></ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement name="WeaponOffRow" class="weapon-loadout-row" picking-mode="Ignore">
-                    <ui:Label class="effect-icon" text="◇" />
-                    <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="OFF HAND" /><ui:Label name="WeaponOffName" class="effect-description" text="None selected" /></ui:VisualElement>
-                </ui:VisualElement>
+                    <ui:VisualElement class="weapon-summary">
+                        <ui:VisualElement name="WeaponDetailsIcon" class="weapon-details-icon" picking-mode="Ignore" />
+                        <ui:VisualElement class="summary-copy" picking-mode="Ignore">
+                            <ui:Label name="WeaponDetailsDiscipline" class="summary-tier" text="YOUR STARTING DISCIPLINE" />
+                            <ui:Label name="WeaponDetailsKind" class="summary-headline" text="WEAPON TYPE" />
+                        </ui:VisualElement>
+                        <ui:Label name="WeaponEquippedChip" class="equipped-chip" text="EQUIPPED" />
+                    </ui:VisualElement>
 
-                <ui:VisualElement name="MainWeaponColorSection" class="weapon-color-section">
-                    <ui:Label class="effect-title" text="MAIN HAND COLOR" />
-                    <ui:VisualElement name="MainWeaponColors" class="weapon-color-list" />
-                </ui:VisualElement>
-                <ui:VisualElement name="OffHandWeaponColorSection" class="weapon-color-section">
-                    <ui:Label class="effect-title" text="OFF HAND COLOR" />
-                    <ui:VisualElement name="OffHandWeaponColors" class="weapon-color-list" />
-                </ui:VisualElement>
+                    <ui:VisualElement class="effect-heading" picking-mode="Ignore"><ui:Label text="LOADOUT" /><ui:Label text="SELECTION" /></ui:VisualElement>
+                    <ui:VisualElement class="weapon-loadout-row" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="◆" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="MAIN HAND" /><ui:Label name="WeaponMainName" class="effect-description" text="None selected" /></ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="WeaponOffRow" class="weapon-loadout-row" picking-mode="Ignore">
+                        <ui:Label class="effect-icon" text="◇" />
+                        <ui:VisualElement class="effect-copy"><ui:Label class="effect-title" text="OFF HAND" /><ui:Label name="WeaponOffName" class="effect-description" text="None selected" /></ui:VisualElement>
+                    </ui:VisualElement>
 
-                <ui:VisualElement class="weapon-rule-card" picking-mode="Ignore">
-                    <ui:Label class="note-title" text="EQUIPMENT RULE" />
-                    <ui:Label name="WeaponDetailsRule" class="note-body" text="Weapon eligibility is validated by the Hub and match server." />
-                </ui:VisualElement>
+                    <ui:VisualElement name="MainWeaponColorSection" class="weapon-color-section">
+                        <ui:Label class="effect-title" text="MAIN HAND COLOR" />
+                        <ui:VisualElement name="MainWeaponColors" class="weapon-color-list" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="OffHandWeaponColorSection" class="weapon-color-section">
+                        <ui:Label class="effect-title" text="OFF HAND COLOR" />
+                        <ui:VisualElement name="OffHandWeaponColors" class="weapon-color-list" />
+                    </ui:VisualElement>
 
-                <ui:VisualElement class="weapon-details-spacer" />
-                <ui:Button name="EquipWeaponButton" class="equip-button" text="◆  EQUIP WEAPONS  ◆" />
+                    <ui:VisualElement class="weapon-rule-card" picking-mode="Ignore">
+                        <ui:Label class="note-title" text="EQUIPMENT RULE" />
+                        <ui:Label name="WeaponDetailsRule" class="note-body" text="Choose weapons that support your starting discipline." />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="weapon-details-spacer" />
+                </ui:ScrollView>
+                <ui:Button name="EquipWeaponButton" class="equip-button primary-button" text="EQUIP WEAPONS" />
                 <ui:Button name="WeaponBackButton" class="back-button" text="BACK TO HUB" />
             </ui:VisualElement>
         </ui:VisualElement>

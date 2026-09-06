@@ -55,7 +55,6 @@ namespace Arena.UI
         private Label? _loadoutSlot0Glyph;
         private Label? _loadoutSlot1Glyph;
         private Label? _loadoutSlot2Glyph;
-        private Label? _partyCount;
         private Button? _practiceButton;
         private Button? _navDisciplines;
         private Button? _navEquipment;
@@ -323,7 +322,6 @@ namespace Arena.UI
             _loadoutSlot0Glyph = _root.Q<Label>("LoadoutSlot0Glyph");
             _loadoutSlot1Glyph = _root.Q<Label>("LoadoutSlot1Glyph");
             _loadoutSlot2Glyph = _root.Q<Label>("LoadoutSlot2Glyph");
-            _partyCount = _root.Q<Label>("PartyCount");
             _practiceButton = _root.Q<Button>("PracticeButton");
             _navDisciplines = _root.Q<Button>("NavDisciplines");
             _navEquipment = _root.Q<Button>("NavEquipment");
@@ -365,6 +363,12 @@ namespace Arena.UI
                 _navDisciplines.clicked += OpenDisciplines;
             if (_navEquipment != null)
                 _navEquipment.clicked += OpenEquipment;
+            Button? editLoadout = _root.Q<Button>("EditLoadout");
+            if (editLoadout != null)
+                editLoadout.clicked += OpenDisciplines;
+            Button? editEquipment = _root.Q<Button>("EditEquipment");
+            if (editEquipment != null)
+                editEquipment.clicked += OpenEquipment;
 
             Button? settingsButton = _root.Q<Button>("SettingsButton");
             if (settingsButton != null)
@@ -479,7 +483,7 @@ namespace Arena.UI
                 _queueName.text = queueLabel;
             if (_queueButton != null)
             {
-                _queueButton.tooltip = "The first playable queue is unranked.";
+                _queueButton.tooltip = "Unranked 2v2 against stationary training dummies.";
                 _queueButton.SetEnabled(false);
             }
 
@@ -671,9 +675,6 @@ namespace Arena.UI
             }
 
             RefreshCombatBuild(hub);
-
-            if (_partyCount != null)
-                _partyCount.text = "1 / 4";
         }
 
         private void RefreshCombatBuild(HubNetworkManager? hub)
@@ -761,7 +762,7 @@ namespace Arena.UI
                 : normalizedSpecializationId.Replace('_', ' ');
             if (name != null)
                 name.text = displayName;
-            Sprite? sprite = DisciplinesScreen.ResolveDisciplineIcon(normalizedId);
+            Sprite? sprite = DisciplinesScreen.ResolveSpecializationIcon(normalizedSpecializationId);
             SetBackground(art, sprite);
             if (icon != null)
                 ApplyBorderColor(icon, DisciplinesScreen.DisciplineColor(normalizedId));

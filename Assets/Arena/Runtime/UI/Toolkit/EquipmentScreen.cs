@@ -52,7 +52,7 @@ namespace Arena.UI
             new Dictionary<string, SetPresentation>(StringComparer.Ordinal)
             {
                 ["PEASANT"] = new(
-                    "◇",
+                    "I",
                     "UNRESTRICTED MOBILITY",
                     "Simple clothing that leaves movement and spellcasting completely unimpeded.",
                     ArmorPieces(
@@ -61,7 +61,7 @@ namespace Arena.UI
                         ("BOOTS", "PEASANT_BOOTS"),
                         ("GLOVES", "PEASANT_GLOVES"))),
                 ["APPRENTICE"] = new(
-                    "✧",
+                    "I",
                     "UNRESTRICTED MOBILITY",
                     "Cloth vestments for combatants who value speed and unhindered spellwork.",
                     ArmorPieces(
@@ -73,7 +73,7 @@ namespace Arena.UI
                         ("BOOTS", "APPRENTICE_BOOTS"),
                         ("GLOVES", "APPRENTICE_GLOVES"))),
                 ["LEATHER"] = new(
-                    "◆",
+                    "II",
                     "BALANCED PROTECTION",
                     "Supple layered leather that balances reliable protection with full mobility.",
                     ArmorPieces(
@@ -85,7 +85,7 @@ namespace Arena.UI
                         ("BOOTS", "LEATHER_BOOTS"),
                         ("GLOVES", "LEATHER_GLOVES"))),
                 ["IRON"] = new(
-                    "⬟",
+                    "III",
                     "MAXIMUM PROTECTION",
                     "Battle-worn iron plate built to absorb punishing blows and hostile magic.",
                     ArmorPieces(
@@ -498,7 +498,7 @@ namespace Arena.UI
             if (_detailsName != null)
                 _detailsName.text = "ARMOR CATALOG";
             if (_detailsFlavor != null)
-                _detailsFlavor.text = "Connecting to the authoritative equipment catalog…";
+                _detailsFlavor.text = "Loading your equipment collection…";
             if (_equipButton != null)
             {
                 _equipButton.SetEnabled(false);
@@ -557,13 +557,13 @@ namespace Arena.UI
             SetSelectedClass("ArmorMode", !weapons);
             SetSelectedClass("WeaponsMode", weapons);
 
-            SetText(_pageKicker, weapons ? "WEAPON LOADOUT" : "ARMOR LOADOUT");
-            SetText(_pageTitle, weapons ? "CHOOSE YOUR WEAPONS" : "CHOOSE YOUR ARMOR");
+            SetText(_pageKicker, "THE ARMORY");
+            SetText(_pageTitle, "Equipment");
             SetText(
                 _pageSubtitle,
                 weapons
-                    ? "Your combat discipline determines the weapons available to equip."
-                    : "Balance protection and mobility. Armor is equipped as a complete set.");
+                    ? "Find your weapon. Choose a finish. Enter battle on your terms."
+                    : "Balance protection and mobility. Find the set that suits your style.");
         }
 
         private void RenderTiers()
@@ -614,7 +614,7 @@ namespace Arena.UI
                 copy.Add(name);
                 copy.Add(effects);
 
-                Label check = new(setId == _activeSetId ? "✓" : "›");
+                Label check = new(setId == _activeSetId ? "•" : "›");
                 check.AddToClassList("set-check");
                 card.Add(sigil);
                 card.Add(copy);
@@ -664,10 +664,10 @@ namespace Arena.UI
                 _equipButton.EnableInClassList("is-pending", _equipPending);
                 _equipButton.SetEnabled(!_equipPending);
                 _equipButton.text = _equipPending
-                    ? "◆  EQUIPPING…  ◆"
+                    ? "EQUIPPING…"
                     : equipped
-                        ? "◆  EQUIPPED  ◆"
-                        : "◆  EQUIP COMPLETE SET  ◆";
+                        ? "EQUIPPED"
+                        : "EQUIP ARMOR SET";
             }
         }
 
@@ -915,7 +915,7 @@ namespace Arena.UI
                 copy.Add(name);
                 copy.Add(meta);
 
-                Label check = new(itemDefId == selectedId ? "◆" : "›");
+                Label check = new(itemDefId == selectedId ? "•" : "›");
                 check.AddToClassList("weapon-card-check");
                 card.Add(icon);
                 card.Add(copy);
@@ -1014,10 +1014,10 @@ namespace Arena.UI
                 _equipWeaponButton.EnableInClassList("is-pending", _weaponEquipPending);
                 _equipWeaponButton.SetEnabled(valid && !_weaponEquipPending);
                 _equipWeaponButton.text = _weaponEquipPending
-                    ? "◆  EQUIPPING…  ◆"
+                    ? "EQUIPPING…"
                     : equipped
-                        ? "◆  EQUIPPED  ◆"
-                        : "◆  EQUIP WEAPONS  ◆";
+                        ? "EQUIPPED"
+                        : "EQUIP WEAPONS";
             }
         }
 
@@ -1331,17 +1331,17 @@ namespace Arena.UI
             return tier switch
             {
                 "HEAVY" => new SetPresentation(
-                    "⬟",
+                    "III",
                     "MAXIMUM PROTECTION",
                     "Complete plate armor built for maximum physical and magical protection.",
                     CompleteArmorPieces(normalized)),
                 "MEDIUM" => new SetPresentation(
-                    "◆",
+                    "II",
                     "BALANCED PROTECTION",
                     "Complete layered armor that provides reliable protection without mobility penalties.",
                     CompleteArmorPieces(normalized)),
                 _ => new SetPresentation(
-                    "◇",
+                    "I",
                     "UNRESTRICTED MOBILITY",
                     "Complete light armor that leaves movement and spellcasting unimpeded.",
                     CompleteArmorPieces(normalized)),

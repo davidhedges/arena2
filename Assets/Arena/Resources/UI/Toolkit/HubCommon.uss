@@ -1,0 +1,265 @@
+/* Shared runtime design system for Hub, Disciplines and Equipment.
+ * Keep screen layout in its own sheet. These tokens/components are scoped so
+ * the in-match HUD, inventory and system menu retain their own presentation. */
+.arena-hub-ui {
+    --hub-ink: #0C1114;
+    --hub-surface: rgba(15, 22, 25, 0.96);
+    --hub-raised: #172126;
+    --hub-line: #344044;
+    --hub-line-soft: #263237;
+    --hub-brass: #BEA578;
+    --hub-brass-bright: #E1C99B;
+    --hub-text: #EEE9DE;
+    --hub-muted: #A6B0B0;
+    --hub-dim: #7F9195;
+    --hub-selected: #29302C;
+    --hub-success: #A5C7AD;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    color: var(--hub-text);
+    -unity-font-definition: url("/Assets/ThirdParty/Unity/TextMeshPro/Fonts/LiberationSans.ttf");
+    font-size: 15px;
+}
+
+Label {
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.arena-hub-ui Button {
+    margin: 0;
+    padding: 0;
+    border-width: 1px;
+    border-color: var(--hub-line);
+    border-radius: 2px;
+    background-image: none;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--hub-text);
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.14s;
+}
+
+.arena-hub-ui Button:hover { background-color: var(--hub-raised); border-color: var(--hub-brass); }
+
+.arena-hub-ui Button:active { background-color: var(--hub-selected); }
+
+.arena-hub-ui Button:enabled:focus { border-color: var(--hub-brass-bright); }
+
+.arena-hub-ui Button:disabled { opacity: 0.42; }
+
+.arena-hub-ui .topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 88px;
+    flex-direction: row;
+    align-items: stretch;
+    background-color: rgba(10, 15, 18, 0.97);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--hub-line);
+}
+
+.arena-hub-ui .brand-block {
+    width: 264px;
+    flex-shrink: 0;
+    padding-left: 42px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.brand-mark {
+    width: 34px;
+    height: 34px;
+    margin-right: 20px;
+    flex-shrink: 0;
+}
+
+.brand-diamond {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 24px;
+    height: 24px;
+    rotate: 45deg;
+    border-width: 1px;
+    border-color: var(--hub-brass);
+}
+
+.brand-spear {
+    position: absolute;
+    top: 16px;
+    left: 8px;
+    width: 18px;
+    height: 1px;
+    background-color: var(--hub-brass-bright);
+}
+
+.brand-spear--one { rotate: 45deg; }
+
+.brand-spear--two { rotate: -45deg; }
+
+.brand-word {
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 25px;
+    letter-spacing: 5px;
+}
+
+.primary-nav {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.arena-hub-ui .nav-item {
+    min-width: 170px;
+    padding-left: 26px;
+    padding-right: 26px;
+    border-width: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(0,0,0,0);
+    border-radius: 0;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--hub-muted);
+}
+
+.arena-hub-ui .nav-item.is-active {
+    background-color: rgba(190,165,120,0.06);
+    border-bottom-color: var(--hub-brass);
+    color: var(--hub-brass-bright);
+}
+
+.topbar-tools {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding-right: 42px;
+}
+
+.nav-caption {
+    color: var(--hub-dim);
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-right: 26px;
+}
+
+.arena-hub-ui .tool-button {
+    height: 36px;
+    padding-left: 16px;
+    padding-right: 16px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--hub-muted);
+}
+
+.panel-surface {
+    background-color: var(--hub-surface);
+    border-width: 1px;
+    border-color: var(--hub-line);
+    border-radius: 3px;
+}
+
+.section-kicker, .heading-kicker {
+    color: var(--hub-brass);
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+.page-title {
+    margin-top: 6px;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    color: var(--hub-text);
+    font-size: 38px;
+}
+
+.page-subtitle {
+    margin-top: 8px;
+    color: var(--hub-muted);
+    font-size: 15px;
+    white-space: normal;
+}
+
+.section-rule {
+    height: 1px;
+    flex-shrink: 0;
+    margin-top: 24px;
+    margin-bottom: 24px;
+    background-color: var(--hub-line-soft);
+}
+
+.subtle-label {
+    font-size: 10px;
+    letter-spacing: 1.4px;
+    color: var(--hub-dim);
+}
+
+.arena-hub-ui .primary-button {
+    min-height: 50px;
+    flex-shrink: 0;
+    padding: 12px 16px;
+    background-color: var(--hub-brass);
+    border-color: var(--hub-brass);
+    color: #161C1E;
+    font-size: 13px;
+    letter-spacing: 1.6px;
+    align-items: center;
+    justify-content: center;
+}
+
+.arena-hub-ui .primary-button:hover, .arena-hub-ui .primary-button:focus {
+    background-color: var(--hub-brass-bright);
+    border-color: var(--hub-brass-bright);
+    color: #101719;
+}
+
+.arena-hub-ui .primary-button:active { background-color: #AE956A; }
+
+.arena-hub-ui .secondary-button {
+    height: 46px;
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border-color: #59605A;
+    color: var(--hub-brass-bright);
+    font-size: 12px;
+    letter-spacing: 1.2px;
+}
+
+.arena-hub-ui .text-button, .arena-hub-ui .back-button {
+    height: 40px;
+    flex-shrink: 0;
+    margin-top: 8px;
+    border-color: rgba(0,0,0,0);
+    color: var(--hub-muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.arena-hub-ui .text-button:hover, .arena-hub-ui .back-button:hover { color: var(--hub-text); border-color: var(--hub-line); }
+
+.arena-hub-ui .unity-scroll-view { min-height: 0; min-width: 0; }
+
+.arena-hub-ui .unity-scroll-view__content-container { flex-shrink: 0; }
+
+.arena-hub-ui .unity-scroller--vertical { width: 10px; margin-left: 6px; }
+
+.arena-hub-ui .unity-scroller__low-button, .arena-hub-ui .unity-scroller__high-button { display: none; }
+
+.arena-hub-ui .unity-base-slider__tracker { background-color: var(--hub-ink); border-width: 0; }
+
+.arena-hub-ui .unity-base-slider__dragger {
+    background-color: #586465;
+    border-width: 0;
+    border-radius: 2px;
+}
+
+/* Decorative elements never intercept pointer events (set in UXML). */
+.corner, .dialog-accent, .button-cap, .showcase-focus, .showcase-mark { display: none; }

@@ -1,16 +1,14 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <!-- Canonical combat-build v2 editor. Hub projections populate all slots,
-         features, and Traits; the concept informs hierarchy only and does not
-         introduce progression gates or per-Specialization feature limits. -->
+    <Style src="HubCommon.uss" />
     <Style src="Disciplines.uss" />
 
-    <ui:VisualElement name="DisciplinesScreen" class="disciplines-screen">
+    <ui:VisualElement name="DisciplinesScreen" class="arena-hub-ui disciplines-screen">
         <ui:VisualElement class="screen-background" picking-mode="Ignore" />
         <ui:VisualElement class="screen-veil" picking-mode="Ignore" />
         <ui:VisualElement class="screen-vignette" picking-mode="Ignore" />
 
         <ui:VisualElement name="TopBar" class="topbar">
-            <ui:Button name="NavPlay" class="brand-block">
+            <ui:Button name="NavPlay" class="brand-block" tooltip="Return to Hub">
                 <ui:VisualElement class="brand-mark" picking-mode="Ignore">
                     <ui:VisualElement class="brand-diamond" />
                     <ui:VisualElement class="brand-spear brand-spear--one" />
@@ -18,35 +16,27 @@
                 </ui:VisualElement>
                 <ui:Label class="brand-word" text="ARENA" picking-mode="Ignore" />
             </ui:Button>
-
             <ui:VisualElement class="primary-nav">
-                <ui:Button name="NavPlayTab" class="nav-item"><ui:Label text="PLAY" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="NavDisciplines" class="nav-item is-active"><ui:Label text="DISCIPLINES" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="NavEquipment" class="nav-item"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="APPEARANCE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="CAREER" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="STORE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavPlayTab" class="nav-item " text="HUB" />
+                <ui:Button name="NavDisciplines" class="nav-item is-active" text="DISCIPLINES" />
+                <ui:Button name="NavEquipment" class="nav-item " text="EQUIPMENT" />
             </ui:VisualElement>
-
             <ui:VisualElement class="topbar-tools">
-                <ui:VisualElement class="currency currency--gold"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="G" /></ui:VisualElement><ui:Label text="1,250" /></ui:VisualElement>
-                <ui:VisualElement class="currency currency--arcane"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="A" /></ui:VisualElement><ui:Label text="340" /></ui:VisualElement>
-                <ui:Button class="tool-button"><ui:Label class="tool-people" text="●●" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="tool-button"><ui:Label class="tool-envelope" text="◇" picking-mode="Ignore" /></ui:Button>
-                <ui:Button name="SettingsButton" class="tool-button"><ui:Label class="tool-cog" text="✦" picking-mode="Ignore" /></ui:Button>
+                <ui:Label class="nav-caption" text="PREPARE FOR BATTLE" picking-mode="Ignore" />
+                <ui:Button name="SettingsButton" class="tool-button" text="SETTINGS" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement class="build-heading">
             <ui:VisualElement class="build-heading-copy" picking-mode="Ignore">
                 <ui:Label class="heading-kicker" text="COMBAT LOADOUT" />
-                <ui:Label class="page-title" text="YOUR ENTIRE BUILD AT A GLANCE" />
-                <ui:Label class="page-subtitle" text="Choose Forms or Schools, then shape each one with Techniques, Spells, and Perks." />
+                <ui:Label class="page-title" text="Disciplines" />
+                <ui:Label class="page-subtitle" text="Choose your paths. Make them your own." />
             </ui:VisualElement>
             <ui:VisualElement class="allocation-panel">
-                <ui:VisualElement class="allocation-item"><ui:Label name="ActiveAllocation" class="allocation-value allocation-value--active" text="—" /><ui:Label class="allocation-label" text="ACTIVE FEATURES" /></ui:VisualElement>
+                <ui:VisualElement class="allocation-item"><ui:Label name="ActiveAllocation" class="allocation-value allocation-value--active" text="—" /><ui:Label class="allocation-label" text="ACTIVE" /></ui:VisualElement>
                 <ui:VisualElement class="allocation-divider" />
-                <ui:VisualElement class="allocation-item"><ui:Label name="TotalAllocation" class="allocation-value" text="—" /><ui:Label class="allocation-label" text="FEATURES" /></ui:VisualElement>
+                <ui:VisualElement class="allocation-item"><ui:Label name="TotalAllocation" class="allocation-value" text="—" /><ui:Label class="allocation-label" text="FEATURE CAPACITY" /></ui:VisualElement>
                 <ui:VisualElement class="allocation-divider" />
                 <ui:VisualElement class="allocation-item"><ui:Label name="DisciplineAllocation" class="allocation-value allocation-value--disciplines" text="—" /><ui:Label class="allocation-label" text="FORMS · SCHOOLS" /></ui:VisualElement>
             </ui:VisualElement>
@@ -55,18 +45,18 @@
         <ui:VisualElement class="loadout-overview panel-surface">
             <ui:VisualElement class="overview-heading" picking-mode="Ignore">
                 <ui:VisualElement>
-                    <ui:Label class="section-kicker" text="SELECTED FORMS · SCHOOLS" />
-                    <ui:Label class="overview-title" text="COMBAT LOADOUT" />
+                    <ui:Label class="section-kicker" text="01 / YOUR PATHS" />
+                    <ui:Label class="overview-title" text="Forms &amp; schools" />
                 </ui:VisualElement>
-                <ui:Label class="overview-help" text="SELECT A SLOT TO CONFIGURE" />
+                <ui:Label class="overview-help" text="SELECT A PATH TO EDIT ITS ABILITIES" />
             </ui:VisualElement>
             <ui:VisualElement name="DisciplineCards" class="discipline-cards" />
         </ui:VisualElement>
 
         <ui:VisualElement class="trait-strip panel-surface">
             <ui:VisualElement class="trait-heading" picking-mode="Ignore">
-                <ui:Label class="section-kicker" text="BUILD-WIDE BONUSES" />
-                <ui:Label class="trait-title" text="TRAITS" />
+                <ui:Label class="section-kicker" text="02 / YOUR EDGE" />
+                <ui:Label class="trait-title" text="Traits" />
             </ui:VisualElement>
             <ui:VisualElement name="TraitOptions" class="trait-options" />
         </ui:VisualElement>
@@ -76,13 +66,13 @@
 
             <ui:VisualElement class="build-footer panel-surface">
                 <ui:VisualElement class="save-heading" picking-mode="Ignore">
-                    <ui:Label class="section-kicker" text="CURRENT CONFIGURATION" />
-                    <ui:Label class="save-title" text="LOADOUT SUMMARY" />
+                    <ui:Label class="section-kicker" text="READY YOUR BUILD" />
+                    <ui:Label class="save-title" text="The final word" />
                 </ui:VisualElement>
-                <ui:VisualElement name="SaveSummary" class="save-summary" />
+                <ui:ScrollView name="SaveSummary" class="save-summary" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
                 <ui:Label name="SaveStatus" class="save-status" text="Waiting for your combat build." />
                 <ui:VisualElement class="footer-actions">
-                    <ui:Button name="SaveBuild" class="save-button" text="◆  SAVE COMBAT BUILD  ◆" />
+                    <ui:Button name="SaveBuild" class="save-button primary-button" text="SAVE LOADOUT" />
                     <ui:Button name="BackButton" class="back-button" text="BACK TO HUB" />
                 </ui:VisualElement>
             </ui:VisualElement>
