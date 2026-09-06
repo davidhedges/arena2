@@ -6535,18 +6535,7 @@ pub(crate) fn blade_twisting_bleed_runtime() -> Option<BladeTwistingBleedRuntime
 }
 
 fn canonical_action_bar_slot_id(value: &str) -> String {
-    match normalize_identifier(value).as_str() {
-        "BOTTOM_01" => "SLOT_0_0".to_string(),
-        "BOTTOM_02" => "SLOT_0_1".to_string(),
-        "BOTTOM_03" => "SLOT_0_2".to_string(),
-        "BOTTOM_04" => "SLOT_0_3".to_string(),
-        "BOTTOM_05" => "SLOT_0_4".to_string(),
-        "BOTTOM_06" => "SLOT_0_5".to_string(),
-        "BOTTOM_07" => "SLOT_0_6".to_string(),
-        "BOTTOM_08" => "SLOT_0_7".to_string(),
-        "BOTTOM_09" => "SLOT_0_8".to_string(),
-        other => other.to_string(),
-    }
+    normalize_identifier(value)
 }
 
 fn encode_tags(tags: &[String]) -> String {
@@ -10661,11 +10650,30 @@ mod tests {
     }
 
     #[test]
-    fn legacy_bottom_slot_ids_canonicalize_to_grid_ids() {
-        assert_eq!(canonical_action_bar_slot_id("bottom_01"), "SLOT_0_0");
-        assert_eq!(canonical_action_bar_slot_id("BOTTOM_08"), "SLOT_0_7");
-        assert_eq!(canonical_action_bar_slot_id("BOTTOM_09"), "SLOT_0_8");
-        assert_eq!(canonical_action_bar_slot_id("slot_1_0"), "SLOT_1_0");
+    fn embedded_action_bar_slots_need_only_identifier_normalization() {
+        let expected: HashSet<_> = (0..5)
+            .map(|index| format!("DISCIPLINE_{index}"))
+            .chain((0..3).flat_map(|row| (0..9).map(move |col| format!("SLOT_{row}_{col}"))))
+            .collect();
+        let actual: HashSet<_> = progression_catalog()
+            .slots
+            .iter()
+            .map(|slot| canonical_action_bar_slot_id(&slot.slot_id))
+            .collect();
+        assert_eq!(actual, expected);
+        assert_eq!(progression_catalog().slots.len(), actual.len());
+        assert_eq!(canonical_action_bar_slot_id("  slot_1_0\t"), "SLOT_1_0");
+        assert_eq!(
+            canonical_action_bar_slot_id(" discipline_2 "),
+            "DISCIPLINE_2"
+        );
+        for index in 1..=9 {
+            let obsolete = canonical_action_bar_slot_id(&format!("bottom_{index:02}"));
+            assert!(
+                !actual.contains(&obsolete),
+                "obsolete IDs are not catalog slots"
+            );
+        }
     }
 
     #[test]
