@@ -1481,16 +1481,6 @@ where
     hi
 }
 
-/// Legacy signature kept for callers that don't have a Y coordinate.
-pub fn resolve_arena_horizontal_collision(
-    seed: u64,
-    x: f32,
-    z: f32,
-    player_radius: f32,
-) -> (f32, f32) {
-    resolve_arena_horizontal_collision_y(seed, x, z, player_radius, f32::MAX, f32::MAX)
-}
-
 /// Y-aware horizontal collision.  Only pushes the player out of obstacles
 /// whose vertical extent overlaps the player's Y band.
 pub fn resolve_arena_horizontal_collision_y(
